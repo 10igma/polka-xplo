@@ -1,0 +1,27 @@
+{
+  "id": "pallet-staking",
+  "name": "Staking",
+  "version": "1.0.0",
+  "description": "Extension for the Staking pallet — indexes validator rewards, slashes, bonding, and nomination events.",
+  "palletId": "Staking",
+  "supportedEvents": [
+    "Staking.Rewarded",
+    "Staking.Slashed",
+    "Staking.Bonded",
+    "Staking.Unbonded",
+    "Staking.Withdrawn",
+    "Staking.Chilled",
+    "Staking.EraPaid",
+    "Staking.StakersElected"
+  ],
+  "supportedCalls": [
+    "Staking.bond",
+    "Staking.bond_extra",
+    "Staking.unbond",
+    "Staking.nominate",
+    "Staking.chill",
+    "Staking.validate",
+    "Staking.payout_stakers"
+  ],
+  "dependencies": []
+}

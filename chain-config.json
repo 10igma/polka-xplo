@@ -1,0 +1,46 @@
+{
+  "chains": [
+    {
+      "id": "polkadot",
+      "name": "Polkadot",
+      "rpc": ["wss://rpc.polkadot.io"],
+      "addressPrefix": 0,
+      "tokenSymbol": "DOT",
+      "tokenDecimals": 10,
+      "colorTheme": "#E6007A"
+    },
+    {
+      "id": "kusama",
+      "name": "Kusama",
+      "rpc": ["wss://kusama-rpc.polkadot.io"],
+      "addressPrefix": 2,
+      "tokenSymbol": "KSM",
+      "tokenDecimals": 12,
+      "colorTheme": "#000000"
+    },
+    {
+      "id": "assethub",
+      "name": "Asset Hub",
+      "rpc": ["wss://polkadot-asset-hub-rpc.polkadot.io"],
+      "addressPrefix": 0,
+      "tokenSymbol": "DOT",
+      "tokenDecimals": 10,
+      "colorTheme": "#48CC81",
+      "isParachain": true,
+      "relayChain": "polkadot"
+    },
+    {
+      "id": "moonbeam",
+      "name": "Moonbeam",
+      "rpc": ["wss://wss.api.moonbeam.network"],
+      "addressPrefix": 1284,
+      "tokenSymbol": "GLMR",
+      "tokenDecimals": 18,
+      "colorTheme": "#53CBC9",
+      "isParachain": true,
+      "relayChain": "polkadot",
+      "addressType": "H160"
+    }
+  ],
+  "defaultChain": "polkadot"
+}

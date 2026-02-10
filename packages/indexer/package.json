@@ -1,0 +1,24 @@
+{
+  "name": "@polka-xplo/indexer",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "start": "node dist/index.js",
+    "lint": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@polka-xplo/shared": "*",
+    "@polka-xplo/db": "*",
+    "polkadot-api": "^1.8.0",
+    "ioredis": "^5.4.0",
+    "express": "^4.21.0"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "typescript": "^5.7.0"
+  }
+}
