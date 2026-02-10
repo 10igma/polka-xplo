@@ -102,13 +102,17 @@ export function detectSearchType(
 
 /** Truncate a hash for display: 0x1234...abcd */
 export function truncateHash(hash: string, chars: number = 6): string {
-  if (hash.length <= chars * 2 + 2) return hash;
+  if (!hash || hash.length <= chars * 2 + 2) return hash ?? "";
   return `${hash.slice(0, chars + 2)}...${hash.slice(-chars)}`;
 }
 
-/** Format a Unix timestamp to human-readable relative time */
-export function timeAgo(timestamp: number): string {
-  const seconds = Math.floor(Date.now() / 1000 - timestamp);
+/** Format a Unix timestamp (seconds or ms) to human-readable relative time */
+export function timeAgo(timestamp: number | null): string {
+  if (!timestamp) return "\u2014";
+  // Normalize to seconds if ms
+  const ts = timestamp > 1e12 ? Math.floor(timestamp / 1000) : timestamp;
+  const seconds = Math.floor(Date.now() / 1000 - ts);
+  if (seconds < 0) return "just now";
   if (seconds < 60) return `${seconds}s ago`;
   const minutes = Math.floor(seconds / 60);
   if (minutes < 60) return `${minutes}m ago`;

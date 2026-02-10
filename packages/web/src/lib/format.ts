@@ -1,12 +1,10 @@
 /**
  * Formatting utilities for the explorer UI.
+ * truncateHash and timeAgo are re-exported from @polka-xplo/shared
+ * to keep a single source of truth.
  */
 
-/** Truncate a hex hash for display */
-export function truncateHash(hash: string, chars = 6): string {
-  if (!hash || hash.length <= chars * 2 + 2) return hash ?? "";
-  return `${hash.slice(0, chars + 2)}...${hash.slice(-chars)}`;
-}
+export { truncateHash, timeAgo } from "@polka-xplo/shared";
 
 /** Format a balance from raw planck value */
 export function formatBalance(
@@ -31,23 +29,6 @@ export function formatBalance(
   }
 }
 
-/** Format a Unix timestamp (ms or seconds) into a relative time string */
-export function timeAgo(timestamp: number | null): string {
-  if (!timestamp) return "—";
-  // Normalize to seconds
-  const ts = timestamp > 1e12 ? Math.floor(timestamp / 1000) : timestamp;
-  const seconds = Math.floor(Date.now() / 1000 - ts);
-
-  if (seconds < 0) return "just now";
-  if (seconds < 60) return `${seconds}s ago`;
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  return `${days}d ago`;
-}
-
 /** Format a block number with comma separators */
 export function formatNumber(n: number): string {
   return n.toLocaleString("en-US");
@@ -55,7 +36,7 @@ export function formatNumber(n: number): string {
 
 /** Format a date from a Unix timestamp */
 export function formatDate(timestamp: number | null): string {
-  if (!timestamp) return "—";
+  if (!timestamp) return "\u2014";
   const ts = timestamp > 1e12 ? timestamp : timestamp * 1000;
   return new Date(ts).toLocaleString("en-US", {
     year: "numeric",

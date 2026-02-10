@@ -3,7 +3,12 @@
  * Provides typed fetch wrappers for all endpoints.
  */
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
+// Use non-NEXT_PUBLIC_ env var for server-side fetches (Server Components / ISR),
+// falling back to NEXT_PUBLIC_ for client-side fetches and localhost for dev.
+const API_BASE =
+  process.env.API_URL ??
+  process.env.NEXT_PUBLIC_API_URL ??
+  "http://localhost:3001";
 
 async function fetchJson<T>(path: string): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
