@@ -1,4 +1,4 @@
-FROM node:20-alpine AS build
+FROM node:20-slim AS build
 WORKDIR /app
 
 # Copy root workspace config
@@ -23,12 +23,16 @@ COPY chain-config.json ./
 # Build shared first (web depends on it)
 RUN npx tsc -p packages/shared/tsconfig.json
 
+# Accept chain ID as a build argument so NEXT_PUBLIC_ env is inlined at build time
+ARG NEXT_PUBLIC_CHAIN_ID=polkadot
+ENV NEXT_PUBLIC_CHAIN_ID=$NEXT_PUBLIC_CHAIN_ID
+
 # Build the Next.js frontend
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN cd packages/web && npx next build
 
 # --- Production stage ---
-FROM node:20-alpine AS runner
+FROM node:20-slim AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production

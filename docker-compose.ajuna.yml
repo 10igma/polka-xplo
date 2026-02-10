@@ -4,10 +4,20 @@
 #   docker compose -f docker-compose.yml -f docker-compose.ajuna.yml up -d
 #
 # This overrides the default Polkadot configuration to point at
-# the Ajuna Network parachain RPC endpoint.
+# the Ajuna Network parachain RPC endpoint(s).
+#
+# ARCHIVE_NODE_URL supports comma-separated RPC URLs for round-robin
+# load balancing and automatic failover.
 
 services:
   explorer-indexer:
     environment:
-      ARCHIVE_NODE_URL: wss://rpc-para.ajuna.network
+      ARCHIVE_NODE_URL: wss://rpc-para.ajuna.network,wss://ajuna.ibp.network,wss://ajuna.dotters.network
       CHAIN_ID: ajuna
+
+  explorer-web:
+    build:
+      args:
+        NEXT_PUBLIC_CHAIN_ID: ajuna
+    environment:
+      NEXT_PUBLIC_CHAIN_ID: ajuna

@@ -45,12 +45,12 @@ export function OmniSearch() {
         onChange={(e) => setQuery(e.target.value)}
         onKeyDown={handleKeyDown}
         placeholder="Search by block number, hash, or address..."
-        className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-4 py-3 text-sm text-zinc-100 placeholder-zinc-500 outline-none focus:border-polkadot-pink/50 focus:ring-2 focus:ring-polkadot-pink/20 transition-all"
+        className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-4 py-3 text-sm text-zinc-100 placeholder-zinc-500 outline-none focus:border-accent/50 focus:ring-2 focus:ring-accent/20 transition-all"
       />
 
       {loading && (
         <div className="absolute right-3 top-3.5">
-          <div className="w-4 h-4 border-2 border-zinc-600 border-t-polkadot-pink rounded-full animate-spin" />
+          <div className="w-4 h-4 border-2 border-zinc-600 border-t-accent rounded-full animate-spin" />
         </div>
       )}
 

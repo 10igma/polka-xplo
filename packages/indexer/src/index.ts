@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url";
 import { createPool, closePool } from "@polka-xplo/db";
 import { DEFAULT_CONFIG, getChainConfig } from "@polka-xplo/shared";
 import { getClient, disconnectAll } from "./client.js";
+import { RpcPool } from "./rpc-pool.js";
 import { PluginRegistry } from "./plugins/registry.js";
 import { IngestionPipeline } from "./ingestion/pipeline.js";
 import { createApiServer } from "./api/server.js";
@@ -39,29 +40,36 @@ async function main(): Promise<void> {
   await registry.runMigrations();
   console.log(`[Main] Extensions loaded: ${registry.getExtensions().length}`);
 
-  // 4. Start the API server early so /health is always reachable
+  // 4. Parse RPC endpoints (comma-separated list supported for load balancing)
+  const rpcEnv = process.env.ARCHIVE_NODE_URL ?? chainConfig.rpc[0];
+  const rpcUrls = rpcEnv.split(",").map((u) => u.trim()).filter(Boolean);
+  const rpcPool = new RpcPool(rpcUrls);
+
+  // 5. Start the API server early so /health is always reachable
   const port = parseInt(process.env.API_PORT ?? "3001", 10);
-  const apiServer = createApiServer(registry, chainId);
+  const apiServer = createApiServer(registry, chainId, rpcPool);
   apiServer.listen(port, () => {
     console.log(`[Main] API server listening on port ${port}`);
   });
 
-  // 5. Connect to the Polkadot node via PAPI and start the ingestion pipeline.
+  // 6. Connect to the Polkadot node via PAPI and start the ingestion pipeline.
   //    Errors here are non-fatal so the API server keeps serving /health.
   let pipeline: IngestionPipeline | null = null;
   try {
-    const rpcUrl = process.env.ARCHIVE_NODE_URL ?? chainConfig.rpc[0];
-    const activeConfig = { ...chainConfig, rpc: [rpcUrl] };
+    // Primary URL for the PAPI WebSocket subscription client
+    const primaryUrl = rpcUrls[0];
+    const activeConfig = { ...chainConfig, rpc: [primaryUrl] };
     const papiClient = getClient(activeConfig);
-    console.log(`[Main] Connected to ${rpcUrl}`);
 
-    pipeline = new IngestionPipeline(papiClient, registry);
+    console.log(`[Main] Connected to ${primaryUrl} (${rpcUrls.length} endpoint(s) in pool)`);
+
+    pipeline = new IngestionPipeline(papiClient, registry, rpcPool);
     await pipeline.start();
   } catch (err) {
     console.error("[Main] Pipeline failed to start (API server still running):", err);
   }
 
-  // 6. Graceful shutdown
+  // 7. Graceful shutdown
   const shutdown = async () => {
     console.log("[Main] Shutting down...");
     if (pipeline) await pipeline.stop();

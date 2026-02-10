@@ -1,12 +1,76 @@
+import { createRequire } from "node:module";
 import type { PapiClient } from "../client.js";
 import type { PluginRegistry } from "../plugins/registry.js";
-import { processBlock, type RawBlockData } from "./block-processor.js";
+import { RpcPool } from "../rpc-pool.js";
+import { processBlock, type RawBlockData, type RawExtrinsic, type RawEvent } from "./block-processor.js";
+import { ExtrinsicDecoder } from "./extrinsic-decoder.js";
 import {
   getLastFinalizedHeight,
   upsertIndexerState,
   finalizeBlock,
 } from "@polka-xplo/db";
-import type { BlockStatus } from "@polka-xplo/shared";
+import type { BlockStatus, DigestLog } from "@polka-xplo/shared";
+import { metrics } from "../metrics.js";
+
+// Blake2-256 hash for computing extrinsic tx_hash
+const require2 = createRequire(import.meta.url);
+const { Blake2256 } = require2("@polkadot-api/substrate-bindings") as {
+  Blake2256: (input: Uint8Array) => Uint8Array;
+};
+
+function hexToBytes(hex: string): Uint8Array {
+  const clean = hex.startsWith("0x") ? hex.slice(2) : hex;
+  return new Uint8Array(clean.match(/.{1,2}/g)!.map((b) => parseInt(b, 16)));
+}
+
+function bytesToHex(bytes: Uint8Array): string {
+  return Array.from(bytes).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+/** Compute Blake2-256 hash of a raw extrinsic hex, returning 0x-prefixed hash */
+function computeTxHash(rawHex: string): string {
+  const bytes = hexToBytes(rawHex);
+  return "0x" + bytesToHex(Blake2256(bytes));
+}
+
+/**
+ * Post-process extrinsics with decoded events to fill in success/fee.
+ * Correlates System.ExtrinsicSuccess / ExtrinsicFailed events and
+ * TransactionPayment.TransactionFeePaid events.
+ *
+ * Fee derivation priority:
+ * 1. TransactionPayment.TransactionFeePaid → actual_fee  (most chains)
+ * 2. Balances.Withdraw on a signed extrinsic → amount     (Ajuna / older runtimes)
+ */
+function enrichExtrinsicsFromEvents(
+  extrinsics: RawExtrinsic[],
+  events: RawEvent[]
+): void {
+  for (const evt of events) {
+    if (evt.extrinsicIndex == null) continue;
+    const ext = extrinsics[evt.extrinsicIndex];
+    if (!ext) continue;
+
+    if (evt.module === "System" && evt.event === "ExtrinsicFailed") {
+      ext.success = false;
+    }
+    // Prefer TransactionFeePaid (explicit fee event)
+    if (evt.module === "TransactionPayment" && evt.event === "TransactionFeePaid") {
+      const fee = evt.data?.actual_fee ?? evt.data?.actualFee;
+      if (fee != null) ext.fee = String(fee);
+    }
+    // Fallback: Balances.Withdraw on a signed extrinsic is the fee deduction
+    if (
+      evt.module === "Balances" &&
+      evt.event === "Withdraw" &&
+      ext.signer &&
+      ext.fee == null
+    ) {
+      const amount = evt.data?.amount;
+      if (amount != null) ext.fee = String(amount);
+    }
+  }
+}
 
 /**
  * The Ingestion Pipeline manages the dual-stream architecture:
@@ -27,14 +91,18 @@ export class IngestionPipeline {
   private papiClient: PapiClient;
   private registry: PluginRegistry;
   private chainId: string;
+  private decoder: ExtrinsicDecoder;
+  private rpcPool: RpcPool;
   private running = false;
   private finalizedUnsub: (() => void) | null = null;
   private bestUnsub: (() => void) | null = null;
 
-  constructor(papiClient: PapiClient, registry: PluginRegistry) {
+  constructor(papiClient: PapiClient, registry: PluginRegistry, rpcPool: RpcPool) {
     this.papiClient = papiClient;
     this.registry = registry;
     this.chainId = papiClient.chainConfig.id;
+    this.rpcPool = rpcPool;
+    this.decoder = new ExtrinsicDecoder(rpcPool);
   }
 
   /** Start the ingestion pipeline */
@@ -43,6 +111,7 @@ export class IngestionPipeline {
     this.running = true;
 
     console.log(`[Pipeline:${this.chainId}] Starting ingestion pipeline...`);
+    metrics.setState("syncing");
 
     // Phase 1: Backfill any missed finalized blocks
     await this.backfill();
@@ -69,6 +138,9 @@ export class IngestionPipeline {
   private async backfill(): Promise<void> {
     const dbHeight = await getLastFinalizedHeight();
     const chainTip = await this.getChainFinalizedHeight();
+
+    metrics.setChainTip(chainTip);
+    metrics.seedIndexedHeight(dbHeight);
 
     if (chainTip <= dbHeight) {
       console.log(`[Pipeline:${this.chainId}] No backfill needed. DB at ${dbHeight}, chain at ${chainTip}`);
@@ -107,6 +179,7 @@ export class IngestionPipeline {
     }
 
     await upsertIndexerState(this.chainId, chainTip, chainTip, "live");
+    metrics.setState("live");
     console.log(`[Pipeline:${this.chainId}] Backfill complete.`);
   }
 
@@ -122,7 +195,9 @@ export class IngestionPipeline {
           await this.fetchAndProcessByHash(block.hash, block.number, "finalized");
           await finalizeBlock(block.number);
           await upsertIndexerState(this.chainId, block.number, block.number, "live");
+          metrics.setChainTip(block.number);
         } catch (err) {
+          metrics.recordError();
           console.error(`[Pipeline:${this.chainId}] Error processing finalized block:`, err);
         }
       },
@@ -148,6 +223,7 @@ export class IngestionPipeline {
           console.log(`[Pipeline:${this.chainId}] Best block #${latest.number}`);
           await this.fetchAndProcessByHash(latest.hash, latest.number, "best");
         } catch (err) {
+          metrics.recordError();
           console.error(`[Pipeline:${this.chainId}] Error processing best block:`, err);
         }
       },
@@ -175,56 +251,89 @@ export class IngestionPipeline {
     }
 
     await processBlock(rawBlock, status, this.registry);
+    metrics.recordBlock(height);
   }
 
   /**
-   * Fetch and extract a block using PAPI's PolkadotClient.
+   * Fetch and extract a block using PAPI's PolkadotClient for live blocks,
+   * or falling back to legacy JSON-RPC for historical blocks.
    *
-   * PAPI's raw client returns:
-   * - getBlockHeader(hash): { parentHash, number, stateRoot, extrinsicRoot, digests }
-   * - getBlockBody(hash):   HexString[] (SCALE-encoded extrinsics)
-   *
-   * Full decoding of extrinsics and events requires a TypedApi with
-   * chain-specific descriptors (generated via `npx papi add`). Without
-   * descriptors, we store extrinsic count and raw hex data. Once descriptors
-   * are added, the fetchBlock method can decode module/call/args fully.
+   * PAPI's chainHead_v1 subscription only covers blocks in the current follow
+   * window (recent finalized + best head forks). Historical blocks during
+   * backfill must be fetched via the legacy `chain_getBlock` JSON-RPC method.
    */
   private async fetchBlock(
     blockHash: string | null,
     height: number
   ): Promise<RawBlockData | null> {
+    // If we have a hash from a live subscription, try PAPI first
+    if (blockHash) {
+      try {
+        return await this.fetchBlockViaPapi(blockHash, height);
+      } catch {
+        // Fall through to legacy RPC
+      }
+    }
+
+    // For backfill or if PAPI fails, use legacy JSON-RPC
+    return this.fetchBlockViaLegacyRpc(height);
+  }
+
+  /** Fetch a block via PAPI client (for live/recent blocks in chainHead follow window) */
+  private async fetchBlockViaPapi(
+    blockHash: string,
+    height: number
+  ): Promise<RawBlockData | null> {
     try {
       const { client } = this.papiClient;
 
-      // Resolve hash: from subscription data, or look up
-      let hash = blockHash;
-      if (!hash) {
-        hash = await this.resolveBlockHash(height);
-        if (!hash) return null;
-      }
-
       const [header, body] = await Promise.all([
-        client.getBlockHeader(hash),
-        client.getBlockBody(hash),
+        client.getBlockHeader(blockHash),
+        client.getBlockBody(blockHash),
       ]);
 
-      // Body is HexString[] — each element is a SCALE-encoded extrinsic.
-      // Without chain descriptors we store them with minimal metadata.
+      // Decode extrinsic call info using runtime metadata
+      const { lookup, specVersion } = await this.decoder.ensureMetadata(blockHash);
+      let timestamp: number | null = null;
+
       const extrinsics: RawBlockData["extrinsics"] = body.map(
-        (encodedExt, i) => ({
-          index: i,
-          hash: `${hash}-${i}`,
-          signer: null,
-          module: "Unknown",
-          call: "unknown",
-          args: { raw: encodedExt },
-          success: true,
-          fee: null,
-          tip: null,
-        })
+        (encodedExt, i) => {
+          const decoded = this.decoder.decodeCallInfo(encodedExt, lookup);
+          const ts = this.decoder.extractTimestamp(
+            encodedExt,
+            decoded.module,
+            decoded.call
+          );
+          if (ts !== null) timestamp = ts;
+
+          return {
+            index: i,
+            hash: decoded.signer ? computeTxHash(decoded.rawHex) : null,
+            signer: decoded.signer,
+            module: decoded.module,
+            call: decoded.call,
+            args: decoded.args,
+            success: true, // will be corrected by enrichExtrinsicsFromEvents
+            fee: null,     // will be filled by enrichExtrinsicsFromEvents
+            tip: decoded.tip,
+          };
+        }
       );
 
-      // Check digests for runtime upgrade flag
+      // Decode events from System.Events storage
+      const decodedEvents = await this.decoder.decodeEvents(blockHash, lookup);
+      const events: RawBlockData["events"] = decodedEvents.map((evt) => ({
+        index: evt.index,
+        extrinsicIndex: evt.extrinsicIndex,
+        module: evt.module,
+        event: evt.event,
+        data: evt.data,
+        phaseType: evt.phaseType,
+      }));
+
+      // Correlate success/fee from events back into extrinsics
+      enrichExtrinsicsFromEvents(extrinsics, events);
+
       const hasRuntimeUpgrade = header.digests.some(
         (d) => d.type === "runtimeUpdated"
       );
@@ -234,81 +343,135 @@ export class IngestionPipeline {
         );
       }
 
+      // Parse PAPI digest items into our DigestLog format
+      const digestLogs: DigestLog[] = header.digests.map((d) => {
+        const type = d.type === "runtimeUpdated"
+          ? "runtimeEnvironmentUpdated"
+          : d.type;
+        const value = d.value as { engine?: string; payload?: string } | undefined;
+        return {
+          type,
+          engine: value?.engine ?? null,
+          data: value?.payload ?? "",
+        };
+      });
+
       return {
         number: header.number,
-        hash,
+        hash: blockHash,
         parentHash: header.parentHash,
         stateRoot: header.stateRoot,
         extrinsicsRoot: header.extrinsicRoot,
         extrinsics,
-        events: [], // Requires TypedApi with descriptors for decoding
-        timestamp: null, // Requires decoding the Timestamp.set inherent
+        events,
+        digestLogs,
+        timestamp,
         validatorId: null,
-        specVersion: 0,
+        specVersion,
       };
     } catch (err) {
-      console.error(`[Pipeline:${this.chainId}] Failed to fetch block #${height}:`, err);
+      console.error(`[Pipeline:${this.chainId}] PAPI fetchBlock failed for #${height}:`, err);
       return null;
     }
   }
 
   /**
-   * Resolve a block hash from a block number.
-   * Checks finalized and best blocks known to the PAPI client,
-   * then falls back to the legacy `chain_getBlockHash` RPC method
-   * for historical blocks during backfill.
+   * Fetch a block via legacy `chain_getBlock` JSON-RPC.
+   * Works for any historical block on archive/full nodes that support
+   * the legacy (pre-v2) JSON-RPC API.
    */
-  private async resolveBlockHash(height: number): Promise<string | null> {
+  private async fetchBlockViaLegacyRpc(
+    height: number
+  ): Promise<RawBlockData | null> {
     try {
-      const { client } = this.papiClient;
+      // 1. Resolve block hash via pool
+      const hash = await this.rpcPool.call<string>("chain_getBlockHash", [height]);
+      if (!hash) return null;
 
-      const finalized = await client.getFinalizedBlock();
-      if (finalized.number === height) return finalized.hash;
+      // 2. Fetch the full block via pool
+      const blockResult = await this.rpcPool.call<{
+        block: {
+          header: {
+            parentHash: string;
+            number: string;
+            stateRoot: string;
+            extrinsicsRoot: string;
+            digest: { logs: string[] };
+          };
+          extrinsics: string[];
+        };
+      }>("chain_getBlock", [hash]);
 
-      // Search the best blocks array for the requested height
-      const bestBlocks = await client.getBestBlocks();
-      const match = bestBlocks.find((b) => b.number === height);
-      if (match) return match.hash;
-
-      // Fall back to legacy JSON-RPC for historical block hash resolution.
-      // This uses the `chain_getBlockHash` method which is available on
-      // both full and archive nodes.
-      const rpcUrl = this.papiClient.chainConfig.rpc[0];
-      const hash = await this.rpcGetBlockHash(rpcUrl, height);
-      if (hash) return hash;
-
-      console.warn(
-        `[Pipeline:${this.chainId}] Cannot resolve hash for block #${height} via any method.`
-      );
-      return null;
-    } catch (err) {
-      console.error(`[Pipeline:${this.chainId}] resolveBlockHash(${height}) failed:`, err);
-      return null;
-    }
-  }
-
-  /** Call chain_getBlockHash via direct JSON-RPC */
-  private async rpcGetBlockHash(rpcUrl: string, height: number): Promise<string | null> {
-    // Convert WSS URL to HTTPS for JSON-RPC calls
-    const httpUrl = rpcUrl.replace(/^wss:\/\//, "https://").replace(/^ws:\/\//, "http://");
-    try {
-      const res = await fetch(httpUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          jsonrpc: "2.0",
-          id: 1,
-          method: "chain_getBlockHash",
-          params: [height],
-        }),
-      });
-      const json = await res.json() as { result?: string; error?: unknown };
-      if (json.result && typeof json.result === "string") {
-        return json.result;
+      if (!blockResult?.block) {
+        console.warn(`[Pipeline:${this.chainId}] chain_getBlock returned no data for #${height}`);
+        return null;
       }
-      return null;
+
+      const { header, extrinsics: rawExts } = blockResult.block;
+      const blockNumber = parseInt(header.number, 16);
+
+      // Decode extrinsic call info using runtime metadata
+      const { lookup, specVersion } = await this.decoder.ensureMetadata(hash);
+      let timestamp: number | null = null;
+
+      const extrinsics: RawBlockData["extrinsics"] = rawExts.map(
+        (encodedExt, i) => {
+          const decoded = this.decoder.decodeCallInfo(encodedExt, lookup);
+          const ts = this.decoder.extractTimestamp(
+            encodedExt,
+            decoded.module,
+            decoded.call
+          );
+          if (ts !== null) timestamp = ts;
+
+          return {
+            index: i,
+            hash: decoded.signer ? computeTxHash(decoded.rawHex) : null,
+            signer: decoded.signer,
+            module: decoded.module,
+            call: decoded.call,
+            args: decoded.args,
+            success: true, // will be corrected by enrichExtrinsicsFromEvents
+            fee: null,     // will be filled by enrichExtrinsicsFromEvents
+            tip: decoded.tip,
+          };
+        }
+      );
+
+      // Decode events from System.Events storage
+      const decodedEvents = await this.decoder.decodeEvents(hash, lookup);
+      const events: RawBlockData["events"] = decodedEvents.map((evt) => ({
+        index: evt.index,
+        extrinsicIndex: evt.extrinsicIndex,
+        module: evt.module,
+        event: evt.event,
+        data: evt.data,
+        phaseType: evt.phaseType,
+      }));
+
+      // Correlate success/fee from events back into extrinsics
+      enrichExtrinsicsFromEvents(extrinsics, events);
+
+      // Parse legacy RPC digest logs
+      const digestLogs: DigestLog[] = (header.digest?.logs ?? []).map(
+        (hexLog: string) => parseDigestLogHex(hexLog)
+      );
+
+      return {
+        number: blockNumber,
+        hash,
+        parentHash: header.parentHash,
+        stateRoot: header.stateRoot,
+        extrinsicsRoot: header.extrinsicsRoot,
+        extrinsics,
+        events,
+        digestLogs,
+        timestamp,
+        validatorId: null,
+        specVersion,
+      };
     } catch (err) {
-      console.warn(`[Pipeline:${this.chainId}] RPC chain_getBlockHash(${height}) failed:`, err);
+      console.error(`[Pipeline:${this.chainId}] Legacy RPC failed for block #${height}:`, err);
       return null;
     }
   }
@@ -338,4 +501,39 @@ export class IngestionPipeline {
       return 0;
     }
   }
+}
+
+// ============================================================
+// Digest Log Parsing (Legacy RPC hex-encoded DigestItem)
+// ============================================================
+
+const DIGEST_TYPES: Record<number, string> = {
+  0: "other",
+  4: "consensus",
+  5: "seal",
+  6: "preRuntime",
+  8: "runtimeEnvironmentUpdated",
+};
+
+/** Parse a single hex-encoded SCALE DigestItem from legacy JSON-RPC */
+function parseDigestLogHex(hex: string): DigestLog {
+  const clean = hex.startsWith("0x") ? hex.slice(2) : hex;
+  const typeTag = parseInt(clean.slice(0, 2), 16);
+  const type = DIGEST_TYPES[typeTag] ?? `unknown(${typeTag})`;
+
+  // PreRuntime, Consensus, Seal all have: [type_u8] [engine_id: 4 bytes] [SCALE Vec<u8>]
+  if (typeTag === 4 || typeTag === 5 || typeTag === 6) {
+    const engineHex = clean.slice(2, 10); // 4 bytes = 8 hex chars
+    const engine = Buffer.from(engineHex, "hex").toString("ascii");
+    const data = "0x" + clean.slice(10);
+    return { type, engine, data };
+  }
+
+  // RuntimeEnvironmentUpdated: no payload
+  if (typeTag === 8) {
+    return { type, engine: null, data: "" };
+  }
+
+  // Other: rest is SCALE Vec<u8>
+  return { type, engine: null, data: "0x" + clean.slice(2) };
 }

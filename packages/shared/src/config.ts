@@ -5,20 +5,30 @@ export const DEFAULT_CHAINS: ChainConfig[] = [
   {
     id: "polkadot",
     name: "Polkadot",
-    rpc: ["wss://rpc.polkadot.io"],
+    rpc: [
+      "wss://rpc.polkadot.io",
+      "wss://polkadot-rpc.dwellir.com",
+      "wss://polkadot.public.curie.radiumblock.co/ws",
+    ],
     addressPrefix: 0,
     tokenSymbol: "DOT",
     tokenDecimals: 10,
     colorTheme: "#E6007A",
+    logo: "/logos/polkadot.svg",
   },
   {
     id: "kusama",
     name: "Kusama",
-    rpc: ["wss://kusama-rpc.polkadot.io"],
+    rpc: [
+      "wss://kusama-rpc.polkadot.io",
+      "wss://kusama-rpc.dwellir.com",
+      "wss://kusama.public.curie.radiumblock.co/ws",
+    ],
     addressPrefix: 2,
     tokenSymbol: "KSM",
     tokenDecimals: 12,
     colorTheme: "#000000",
+    logo: "/logos/kusama.svg",
   },
   {
     id: "assethub",
@@ -28,17 +38,23 @@ export const DEFAULT_CHAINS: ChainConfig[] = [
     tokenSymbol: "DOT",
     tokenDecimals: 10,
     colorTheme: "#48CC81",
+    logo: "/logos/assethub.svg",
     isParachain: true,
     relayChain: "polkadot",
   },
   {
     id: "ajuna",
     name: "Ajuna Network",
-    rpc: ["wss://rpc-para.ajuna.network"],
+    rpc: [
+      "wss://rpc-para.ajuna.network",
+      "wss://ajuna.ibp.network",
+      "wss://ajuna.dotters.network",
+    ],
     addressPrefix: 1328,
     tokenSymbol: "AJUN",
     tokenDecimals: 12,
     colorTheme: "#F0388B",
+    logo: "/logos/ajuna.svg",
     isParachain: true,
     relayChain: "polkadot",
   },
@@ -82,13 +98,18 @@ export function detectSearchType(
     return "hash";
   }
 
+  // Hex public key (32 bytes = 64 hex chars + 0x prefix)
+  if (/^0x[0-9a-fA-F]{64}$/.test(trimmed)) {
+    return "address";
+  }
+
   // Block number: purely numeric
   if (/^\d+$/.test(trimmed)) {
     return "blockNumber";
   }
 
-  // SS58 address: starts with a character and is 46-48 chars
-  if (/^[1-9A-HJ-NP-Za-km-z]{46,48}$/.test(trimmed)) {
+  // SS58 address: base58 chars, typically 46-50 chars (varies by prefix)
+  if (/^[1-9A-HJ-NP-Za-km-z]{44,52}$/.test(trimmed)) {
     return "address";
   }
 
