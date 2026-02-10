@@ -146,8 +146,67 @@ export async function processBlock(
 
       await insertEvent(event, client);
 
+      // Track accounts referenced in events
+      const addrs = extractAccountsFromEvent(rawEvt);
+      for (const addr of addrs) {
+        await upsertAccount(addr, addr, raw.number, client);
+      }
+
       // Invoke extension event handlers
       await registry.invokeEventHandlers(blockCtx, event);
     }
   });
+}
+
+// ============================================================
+// Event-based account extraction
+// ============================================================
+
+/**
+ * Extract account addresses mentioned in well-known Substrate events.
+ * This ensures accounts appear in the explorer even if they never signed
+ * a transaction (e.g. transfer recipients, endowed accounts, treasury).
+ */
+function extractAccountsFromEvent(evt: RawEvent): string[] {
+  const addrs: string[] = [];
+  const d = evt.data;
+  if (!d || typeof d !== "object") return addrs;
+
+  switch (`${evt.module}.${evt.event}`) {
+    // Balances pallet
+    case "Balances.Transfer":
+      if (d.from) addrs.push(String(d.from));
+      if (d.to) addrs.push(String(d.to));
+      break;
+    case "Balances.Endowed":
+    case "Balances.DustLost":
+    case "Balances.BalanceSet":
+    case "Balances.Reserved":
+    case "Balances.Unreserved":
+    case "Balances.Slashed":
+    case "Balances.Frozen":
+    case "Balances.Thawed":
+      if (d.who) addrs.push(String(d.who));
+      if (d.account) addrs.push(String(d.account));
+      break;
+    case "Balances.Deposit":
+    case "Balances.Withdraw":
+      if (d.who) addrs.push(String(d.who));
+      break;
+    // System pallet
+    case "System.NewAccount":
+    case "System.KilledAccount":
+      if (d.account) addrs.push(String(d.account));
+      break;
+    // Staking / Session
+    case "Staking.Rewarded":
+      if (d.stash) addrs.push(String(d.stash));
+      break;
+    case "Staking.Slashed":
+      if (d.staker) addrs.push(String(d.staker));
+      break;
+  }
+
+  // Filter out obviously invalid values (non-hex, too short)
+  return addrs.filter((a) => a.startsWith("0x") && a.length >= 42);
 }

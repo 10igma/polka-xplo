@@ -35,6 +35,10 @@ function computeTxHash(rawHex: string): string {
  * Post-process extrinsics with decoded events to fill in success/fee.
  * Correlates System.ExtrinsicSuccess / ExtrinsicFailed events and
  * TransactionPayment.TransactionFeePaid events.
+ *
+ * Fee derivation priority:
+ * 1. TransactionPayment.TransactionFeePaid → actual_fee  (most chains)
+ * 2. Balances.Withdraw on a signed extrinsic → amount     (Ajuna / older runtimes)
  */
 function enrichExtrinsicsFromEvents(
   extrinsics: RawExtrinsic[],
@@ -48,9 +52,20 @@ function enrichExtrinsicsFromEvents(
     if (evt.module === "System" && evt.event === "ExtrinsicFailed") {
       ext.success = false;
     }
+    // Prefer TransactionFeePaid (explicit fee event)
     if (evt.module === "TransactionPayment" && evt.event === "TransactionFeePaid") {
       const fee = evt.data?.actual_fee ?? evt.data?.actualFee;
       if (fee != null) ext.fee = String(fee);
+    }
+    // Fallback: Balances.Withdraw on a signed extrinsic is the fee deduction
+    if (
+      evt.module === "Balances" &&
+      evt.event === "Withdraw" &&
+      ext.signer &&
+      ext.fee == null
+    ) {
+      const amount = evt.data?.amount;
+      if (amount != null) ext.fee = String(amount);
     }
   }
 }
