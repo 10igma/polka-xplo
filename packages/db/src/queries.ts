@@ -1,0 +1,408 @@
+import type {
+  Block,
+  Extrinsic,
+  ExplorerEvent,
+  Account,
+  AccountBalance,
+  IndexerStatus,
+} from "@polka-xplo/shared";
+import { query, transaction, type DbClient } from "./client.js";
+
+// ============================================================
+// Block Queries
+// ============================================================
+
+export async function insertBlock(block: Block): Promise<void> {
+  await query(
+    `INSERT INTO blocks (height, hash, parent_hash, state_root, extrinsics_root, timestamp, validator_id, status, spec_version, event_count, extrinsic_count)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+     ON CONFLICT (height) DO UPDATE SET
+       hash = EXCLUDED.hash,
+       parent_hash = EXCLUDED.parent_hash,
+       status = EXCLUDED.status,
+       event_count = EXCLUDED.event_count,
+       extrinsic_count = EXCLUDED.extrinsic_count`,
+    [
+      block.height,
+      block.hash,
+      block.parentHash,
+      block.stateRoot,
+      block.extrinsicsRoot,
+      block.timestamp,
+      block.validatorId,
+      block.status,
+      block.specVersion,
+      block.eventCount,
+      block.extrinsicCount,
+    ]
+  );
+}
+
+export async function finalizeBlock(height: number): Promise<void> {
+  await query(`UPDATE blocks SET status = 'finalized' WHERE height = $1`, [
+    height,
+  ]);
+}
+
+export async function getBlockByHeight(
+  height: number
+): Promise<Block | null> {
+  const result = await query<Record<string, unknown>>(
+    `SELECT height, hash, parent_hash, state_root, extrinsics_root, timestamp, validator_id, status, spec_version, event_count, extrinsic_count
+     FROM blocks WHERE height = $1`,
+    [height]
+  );
+  return result.rows.length > 0 ? mapBlock(result.rows[0]) : null;
+}
+
+export async function getBlockByHash(hash: string): Promise<Block | null> {
+  const result = await query<Record<string, unknown>>(
+    `SELECT height, hash, parent_hash, state_root, extrinsics_root, timestamp, validator_id, status, spec_version, event_count, extrinsic_count
+     FROM blocks WHERE hash = $1`,
+    [hash]
+  );
+  return result.rows.length > 0 ? mapBlock(result.rows[0]) : null;
+}
+
+export async function getLatestBlocks(
+  limit: number = 20,
+  offset: number = 0
+): Promise<{ blocks: Block[]; total: number }> {
+  const [dataResult, countResult] = await Promise.all([
+    query<Record<string, unknown>>(
+      `SELECT height, hash, parent_hash, state_root, extrinsics_root, timestamp, validator_id, status, spec_version, event_count, extrinsic_count
+       FROM blocks ORDER BY height DESC LIMIT $1 OFFSET $2`,
+      [limit, offset]
+    ),
+    query<{ count: string }>(`SELECT COUNT(*) as count FROM blocks`),
+  ]);
+
+  return {
+    blocks: dataResult.rows.map(mapBlock),
+    total: parseInt(countResult.rows[0].count, 10),
+  };
+}
+
+export async function getLastFinalizedHeight(): Promise<number> {
+  const result = await query<{ height: string | null }>(
+    `SELECT MAX(height) as height FROM blocks WHERE status = 'finalized'`
+  );
+  return result.rows[0]?.height ? parseInt(String(result.rows[0].height), 10) : 0;
+}
+
+/** Remove best-only blocks from an abandoned fork */
+export async function pruneForkedBlocks(fromHeight: number): Promise<void> {
+  await transaction(async (client: DbClient) => {
+    await client.query(
+      `DELETE FROM events WHERE block_height > $1 AND block_height IN (SELECT height FROM blocks WHERE height > $1 AND status = 'best')`,
+      [fromHeight]
+    );
+    await client.query(
+      `DELETE FROM extrinsics WHERE block_height > $1 AND block_height IN (SELECT height FROM blocks WHERE height > $1 AND status = 'best')`,
+      [fromHeight]
+    );
+    await client.query(
+      `DELETE FROM blocks WHERE height > $1 AND status = 'best'`,
+      [fromHeight]
+    );
+  });
+}
+
+// ============================================================
+// Extrinsic Queries
+// ============================================================
+
+export async function insertExtrinsic(ext: Extrinsic): Promise<void> {
+  await query(
+    `INSERT INTO extrinsics (id, block_height, tx_hash, index, signer, module, call, args, success, fee, tip)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+     ON CONFLICT (id) DO UPDATE SET
+       success = EXCLUDED.success,
+       fee = EXCLUDED.fee,
+       args = EXCLUDED.args`,
+    [
+      ext.id,
+      ext.blockHeight,
+      ext.txHash,
+      ext.index,
+      ext.signer,
+      ext.module,
+      ext.call,
+      JSON.stringify(ext.args),
+      ext.success,
+      ext.fee,
+      ext.tip,
+    ]
+  );
+}
+
+export async function getExtrinsicsByBlock(
+  blockHeight: number
+): Promise<Extrinsic[]> {
+  const result = await query<Record<string, unknown>>(
+    `SELECT id, block_height, tx_hash, index, signer, module, call, args, success, fee, tip
+     FROM extrinsics WHERE block_height = $1 ORDER BY index`,
+    [blockHeight]
+  );
+  return result.rows.map(mapExtrinsic);
+}
+
+export async function getExtrinsicByHash(
+  txHash: string
+): Promise<Extrinsic | null> {
+  const result = await query<Record<string, unknown>>(
+    `SELECT id, block_height, tx_hash, index, signer, module, call, args, success, fee, tip
+     FROM extrinsics WHERE tx_hash = $1 LIMIT 1`,
+    [txHash]
+  );
+  return result.rows.length > 0 ? mapExtrinsic(result.rows[0]) : null;
+}
+
+export async function getExtrinsicsBySigner(
+  signer: string,
+  limit: number = 20,
+  offset: number = 0
+): Promise<Extrinsic[]> {
+  const result = await query<Record<string, unknown>>(
+    `SELECT id, block_height, tx_hash, index, signer, module, call, args, success, fee, tip
+     FROM extrinsics WHERE signer = $1 ORDER BY block_height DESC, index LIMIT $2 OFFSET $3`,
+    [signer, limit, offset]
+  );
+  return result.rows.map(mapExtrinsic);
+}
+
+// ============================================================
+// Event Queries
+// ============================================================
+
+export async function insertEvent(evt: ExplorerEvent): Promise<void> {
+  const phaseType = evt.phase.type;
+  const phaseIndex =
+    evt.phase.type === "ApplyExtrinsic" ? evt.phase.index : null;
+
+  await query(
+    `INSERT INTO events (id, block_height, extrinsic_id, index, module, event, data, phase_type, phase_index)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+     ON CONFLICT (id) DO NOTHING`,
+    [
+      evt.id,
+      evt.blockHeight,
+      evt.extrinsicId,
+      evt.index,
+      evt.module,
+      evt.event,
+      JSON.stringify(evt.data),
+      phaseType,
+      phaseIndex,
+    ]
+  );
+}
+
+export async function getEventsByBlock(
+  blockHeight: number
+): Promise<ExplorerEvent[]> {
+  const result = await query<Record<string, unknown>>(
+    `SELECT id, block_height, extrinsic_id, index, module, event, data, phase_type, phase_index
+     FROM events WHERE block_height = $1 ORDER BY index`,
+    [blockHeight]
+  );
+  return result.rows.map(mapEvent);
+}
+
+export async function getEventsByExtrinsic(
+  extrinsicId: string
+): Promise<ExplorerEvent[]> {
+  const result = await query<Record<string, unknown>>(
+    `SELECT id, block_height, extrinsic_id, index, module, event, data, phase_type, phase_index
+     FROM events WHERE extrinsic_id = $1 ORDER BY index`,
+    [extrinsicId]
+  );
+  return result.rows.map(mapEvent);
+}
+
+// ============================================================
+// Account Queries
+// ============================================================
+
+export async function upsertAccount(
+  address: string,
+  publicKey: string,
+  blockHeight: number
+): Promise<void> {
+  await query(
+    `INSERT INTO accounts (address, public_key, last_active_block, created_at_block)
+     VALUES ($1, $2, $3, $3)
+     ON CONFLICT (address) DO UPDATE SET
+       last_active_block = GREATEST(accounts.last_active_block, EXCLUDED.last_active_block),
+       updated_at = NOW()`,
+    [address, publicKey, blockHeight]
+  );
+}
+
+export async function upsertBalance(
+  address: string,
+  balance: AccountBalance,
+  blockHeight: number
+): Promise<void> {
+  await query(
+    `INSERT INTO account_balances (address, free, reserved, frozen, flags, updated_at_block)
+     VALUES ($1, $2, $3, $4, $5, $6)
+     ON CONFLICT (address) DO UPDATE SET
+       free = EXCLUDED.free,
+       reserved = EXCLUDED.reserved,
+       frozen = EXCLUDED.frozen,
+       flags = EXCLUDED.flags,
+       updated_at_block = EXCLUDED.updated_at_block,
+       updated_at = NOW()`,
+    [address, balance.free, balance.reserved, balance.frozen, balance.flags, blockHeight]
+  );
+}
+
+export async function getAccount(
+  address: string
+): Promise<(Account & { balance: AccountBalance | null }) | null> {
+  const result = await query<Record<string, unknown>>(
+    `SELECT a.address, a.public_key, a.identity, a.last_active_block, a.created_at_block,
+            b.free, b.reserved, b.frozen, b.flags
+     FROM accounts a
+     LEFT JOIN account_balances b ON a.address = b.address
+     WHERE a.address = $1`,
+    [address]
+  );
+  if (result.rows.length === 0) return null;
+
+  const row = result.rows[0];
+  return {
+    address: row.address as string,
+    publicKey: row.public_key as string,
+    identity: row.identity as Account["identity"],
+    lastActiveBlock: Number(row.last_active_block),
+    createdAtBlock: Number(row.created_at_block),
+    balance: row.free
+      ? {
+          free: row.free as string,
+          reserved: row.reserved as string,
+          frozen: row.frozen as string,
+          flags: row.flags as string,
+        }
+      : null,
+  };
+}
+
+// ============================================================
+// Indexer State Queries
+// ============================================================
+
+export async function getIndexerState(
+  chainId: string
+): Promise<IndexerStatus | null> {
+  const result = await query<Record<string, unknown>>(
+    `SELECT chain_id, last_finalized_block, last_best_block, state FROM indexer_state WHERE chain_id = $1`,
+    [chainId]
+  );
+  if (result.rows.length === 0) return null;
+  const row = result.rows[0];
+  return {
+    chainId: row.chain_id as string,
+    lastFinalizedBlock: Number(row.last_finalized_block),
+    lastBestBlock: Number(row.last_best_block),
+    state: row.state as IndexerStatus["state"],
+    chainTip: 0,
+    syncProgress: 0,
+    startedAt: 0,
+    errors: [],
+  };
+}
+
+export async function upsertIndexerState(
+  chainId: string,
+  finalizedBlock: number,
+  bestBlock: number,
+  state: string
+): Promise<void> {
+  await query(
+    `INSERT INTO indexer_state (chain_id, last_finalized_block, last_best_block, state)
+     VALUES ($1, $2, $3, $4)
+     ON CONFLICT (chain_id) DO UPDATE SET
+       last_finalized_block = EXCLUDED.last_finalized_block,
+       last_best_block = EXCLUDED.last_best_block,
+       state = EXCLUDED.state,
+       updated_at = NOW()`,
+    [chainId, finalizedBlock, bestBlock, state]
+  );
+}
+
+// ============================================================
+// Search Queries
+// ============================================================
+
+export async function searchByHash(
+  hash: string
+): Promise<{ type: "block" | "extrinsic"; data: Block | Extrinsic } | null> {
+  // Check blocks first
+  const block = await getBlockByHash(hash);
+  if (block) return { type: "block", data: block };
+
+  // Check extrinsics
+  const ext = await getExtrinsicByHash(hash);
+  if (ext) return { type: "extrinsic", data: ext };
+
+  return null;
+}
+
+// ============================================================
+// Row Mapping Helpers
+// ============================================================
+
+function mapBlock(row: Record<string, unknown>): Block {
+  return {
+    height: Number(row.height),
+    hash: row.hash as string,
+    parentHash: row.parent_hash as string,
+    stateRoot: row.state_root as string,
+    extrinsicsRoot: row.extrinsics_root as string,
+    timestamp: row.timestamp ? Number(row.timestamp) : null,
+    validatorId: row.validator_id as string | null,
+    status: row.status as Block["status"],
+    specVersion: Number(row.spec_version),
+    eventCount: Number(row.event_count),
+    extrinsicCount: Number(row.extrinsic_count),
+  };
+}
+
+function mapExtrinsic(row: Record<string, unknown>): Extrinsic {
+  return {
+    id: row.id as string,
+    blockHeight: Number(row.block_height),
+    txHash: row.tx_hash as string,
+    index: Number(row.index),
+    signer: row.signer as string | null,
+    module: row.module as string,
+    call: row.call as string,
+    args: (typeof row.args === "string" ? JSON.parse(row.args) : row.args) as Record<string, unknown>,
+    success: row.success as boolean,
+    fee: row.fee as string | null,
+    tip: row.tip as string | null,
+  };
+}
+
+function mapEvent(row: Record<string, unknown>): ExplorerEvent {
+  const phaseType = row.phase_type as string;
+  const phaseIndex = row.phase_index as number | null;
+
+  return {
+    id: row.id as string,
+    blockHeight: Number(row.block_height),
+    extrinsicId: row.extrinsic_id as string | null,
+    index: Number(row.index),
+    module: row.module as string,
+    event: row.event as string,
+    data: (typeof row.data === "string" ? JSON.parse(row.data) : row.data) as Record<string, unknown>,
+    phase:
+      phaseType === "ApplyExtrinsic"
+        ? { type: "ApplyExtrinsic", index: phaseIndex! }
+        : phaseType === "Finalization"
+          ? { type: "Finalization" }
+          : { type: "Initialization" },
+  };
+}

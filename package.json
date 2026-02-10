@@ -1,0 +1,27 @@
+{
+  "name": "polka-xplo",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "lint": "turbo run lint",
+    "db:migrate": "turbo run db:migrate --filter=@polka-xplo/db",
+    "indexer:start": "turbo run start --filter=@polka-xplo/indexer",
+    "web:dev": "turbo run dev --filter=@polka-xplo/web",
+    "web:build": "turbo run build --filter=@polka-xplo/web",
+    "docker:up": "docker compose up -d",
+    "docker:down": "docker compose down"
+  },
+  "devDependencies": {
+    "turbo": "^2.4.0",
+    "typescript": "^5.7.0"
+  },
+  "packageManager": "npm@10.8.0",
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

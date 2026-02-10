@@ -1,0 +1,53 @@
+import React from "react";
+import type { BlockSummary } from "@/lib/api";
+import { truncateHash, timeAgo, formatNumber } from "@/lib/format";
+
+export function BlockList({ blocks }: { blocks: BlockSummary[] }) {
+  if (blocks.length === 0) {
+    return (
+      <div className="text-center py-12 text-zinc-500">No blocks indexed yet.</div>
+    );
+  }
+
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="text-left text-xs text-zinc-500 border-b border-zinc-800">
+            <th className="pb-2 pr-4">Block</th>
+            <th className="pb-2 pr-4">Hash</th>
+            <th className="pb-2 pr-4">Time</th>
+            <th className="pb-2 pr-4 text-right">Extrinsics</th>
+            <th className="pb-2 text-right">Events</th>
+          </tr>
+        </thead>
+        <tbody>
+          {blocks.map((block) => (
+            <tr key={block.height} className="table-row">
+              <td className="py-2.5 pr-4">
+                <a
+                  href={`/block/${block.height}`}
+                  className="text-polkadot-pink hover:underline font-mono"
+                >
+                  #{formatNumber(block.height)}
+                </a>
+              </td>
+              <td className="py-2.5 pr-4 font-mono text-xs text-zinc-400">
+                {truncateHash(block.hash)}
+              </td>
+              <td className="py-2.5 pr-4 text-zinc-400">
+                {timeAgo(block.timestamp)}
+              </td>
+              <td className="py-2.5 pr-4 text-right text-zinc-300">
+                {block.extrinsicCount}
+              </td>
+              <td className="py-2.5 text-right text-zinc-300">
+                {block.eventCount}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}

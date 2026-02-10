@@ -1,0 +1,53 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --color-bg: #09090b;
+    --color-surface: #18181b;
+    --color-border: #27272a;
+    --color-accent: #E6007A;
+  }
+
+  body {
+    @apply bg-zinc-950 text-zinc-100 antialiased;
+  }
+
+  /* Scrollbar styling */
+  ::-webkit-scrollbar {
+    width: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    @apply bg-zinc-900;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-zinc-700 rounded-full;
+  }
+}
+
+@layer components {
+  .card {
+    @apply rounded-lg border border-zinc-800 bg-zinc-900/50 p-4;
+  }
+
+  .badge {
+    @apply inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium;
+  }
+
+  .badge-success {
+    @apply badge bg-green-950 text-green-400 border border-green-800/50;
+  }
+
+  .badge-error {
+    @apply badge bg-red-950 text-red-400 border border-red-800/50;
+  }
+
+  .badge-info {
+    @apply badge bg-blue-950 text-blue-400 border border-blue-800/50;
+  }
+
+  .table-row {
+    @apply border-b border-zinc-800/50 hover:bg-zinc-800/30 transition-colors;
+  }
+}

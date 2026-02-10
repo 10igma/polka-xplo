@@ -1,0 +1,147 @@
+import type {
+  Block,
+  Extrinsic,
+  ExplorerEvent,
+  BlockContext,
+  BlockStatus,
+} from "@polka-xplo/shared";
+import {
+  insertBlock,
+  insertExtrinsic,
+  insertEvent,
+  upsertAccount,
+} from "@polka-xplo/db";
+import type { PluginRegistry } from "../plugins/registry.js";
+
+export interface RawBlockData {
+  number: number;
+  hash: string;
+  parentHash: string;
+  stateRoot: string;
+  extrinsicsRoot: string;
+  extrinsics: RawExtrinsic[];
+  events: RawEvent[];
+  timestamp: number | null;
+  validatorId: string | null;
+  specVersion: number;
+}
+
+export interface RawExtrinsic {
+  index: number;
+  hash: string;
+  signer: string | null;
+  module: string;
+  call: string;
+  args: Record<string, unknown>;
+  success: boolean;
+  fee: string | null;
+  tip: string | null;
+}
+
+export interface RawEvent {
+  index: number;
+  extrinsicIndex: number | null;
+  module: string;
+  event: string;
+  data: Record<string, unknown>;
+  phaseType: "ApplyExtrinsic" | "Finalization" | "Initialization";
+}
+
+/**
+ * Process a single block: store block, extrinsics, events,
+ * update accounts, and invoke extension plugins.
+ */
+export async function processBlock(
+  raw: RawBlockData,
+  status: BlockStatus,
+  registry: PluginRegistry
+): Promise<void> {
+  const blockCtx: BlockContext = {
+    blockHeight: raw.number,
+    blockHash: raw.hash,
+    timestamp: raw.timestamp,
+    specVersion: raw.specVersion,
+  };
+
+  // 1. Build and store the block record
+  const block: Block = {
+    height: raw.number,
+    hash: raw.hash,
+    parentHash: raw.parentHash,
+    stateRoot: raw.stateRoot,
+    extrinsicsRoot: raw.extrinsicsRoot,
+    timestamp: raw.timestamp,
+    validatorId: raw.validatorId,
+    status,
+    specVersion: raw.specVersion,
+    eventCount: raw.events.length,
+    extrinsicCount: raw.extrinsics.length,
+  };
+
+  await insertBlock(block);
+
+  // Invoke onBlock hooks
+  await registry.invokeBlockHandlers(blockCtx, block);
+
+  // 2. Process extrinsics
+  const extrinsicMap = new Map<number, string>(); // index -> id
+
+  for (const rawExt of raw.extrinsics) {
+    const extId = `${raw.number}-${rawExt.index}`;
+    extrinsicMap.set(rawExt.index, extId);
+
+    const extrinsic: Extrinsic = {
+      id: extId,
+      blockHeight: raw.number,
+      txHash: rawExt.hash,
+      index: rawExt.index,
+      signer: rawExt.signer,
+      module: rawExt.module,
+      call: rawExt.call,
+      args: rawExt.args,
+      success: rawExt.success,
+      fee: rawExt.fee,
+      tip: rawExt.tip,
+    };
+
+    await insertExtrinsic(extrinsic);
+
+    // Track signer account
+    if (rawExt.signer) {
+      await upsertAccount(rawExt.signer, rawExt.signer, raw.number);
+    }
+
+    // Invoke extension extrinsic handlers
+    await registry.invokeExtrinsicHandlers(blockCtx, extrinsic);
+  }
+
+  // 3. Process events and correlate with extrinsics
+  for (const rawEvt of raw.events) {
+    const evtId = `${raw.number}-${rawEvt.index}`;
+    const extrinsicId =
+      rawEvt.extrinsicIndex !== null
+        ? extrinsicMap.get(rawEvt.extrinsicIndex) ?? null
+        : null;
+
+    const event: ExplorerEvent = {
+      id: evtId,
+      blockHeight: raw.number,
+      extrinsicId,
+      index: rawEvt.index,
+      module: rawEvt.module,
+      event: rawEvt.event,
+      data: rawEvt.data,
+      phase:
+        rawEvt.phaseType === "ApplyExtrinsic"
+          ? { type: "ApplyExtrinsic", index: rawEvt.extrinsicIndex! }
+          : rawEvt.phaseType === "Finalization"
+            ? { type: "Finalization" }
+            : { type: "Initialization" },
+    };
+
+    await insertEvent(event);
+
+    // Invoke extension event handlers
+    await registry.invokeEventHandlers(blockCtx, event);
+  }
+}

@@ -1,0 +1,78 @@
+version: "3.8"
+
+services:
+  # PostgreSQL — Primary data store
+  explorer-db:
+    image: postgres:16-alpine
+    container_name: polka-xplo-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: polkaxplo
+      POSTGRES_PASSWORD: polkaxplo
+      POSTGRES_DB: polkaxplo
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U polkaxplo"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Redis — Job queue for block processing
+  explorer-redis:
+    image: redis:7-alpine
+    container_name: polka-xplo-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Indexer — The backend block processor and API
+  explorer-indexer:
+    build:
+      context: .
+      dockerfile: Dockerfile.indexer
+    container_name: polka-xplo-indexer
+    restart: unless-stopped
+    depends_on:
+      explorer-db:
+        condition: service_healthy
+      explorer-redis:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://polkaxplo:polkaxplo@explorer-db:5432/polkaxplo
+      REDIS_URL: redis://explorer-redis:6379
+      ARCHIVE_NODE_URL: wss://rpc.polkadot.io
+      CHAIN_ID: polkadot
+      API_PORT: "3001"
+      BATCH_SIZE: "100"
+    ports:
+      - "3001:3001"
+
+  # Web — The Next.js frontend
+  explorer-web:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+    container_name: polka-xplo-web
+    restart: unless-stopped
+    depends_on:
+      - explorer-indexer
+    environment:
+      NEXT_PUBLIC_API_URL: http://explorer-indexer:3001
+    ports:
+      - "3000:3000"
+
+volumes:
+  pgdata:
+    driver: local
+  redisdata:
+    driver: local

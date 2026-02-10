@@ -1,0 +1,22 @@
+FROM node:20-alpine AS base
+WORKDIR /app
+
+# Install dependencies
+COPY package.json package-lock.json* ./
+COPY packages/shared/package.json ./packages/shared/
+COPY packages/db/package.json ./packages/db/
+COPY packages/indexer/package.json ./packages/indexer/
+RUN npm install --workspace=packages/shared --workspace=packages/db --workspace=packages/indexer
+
+# Copy source
+COPY tsconfig.base.json ./
+COPY packages/shared/ ./packages/shared/
+COPY packages/db/ ./packages/db/
+COPY packages/indexer/ ./packages/indexer/
+COPY extensions/ ./extensions/
+
+# Build
+RUN npx turbo run build --filter=@polka-xplo/indexer
+
+# Run migrations and start
+CMD ["sh", "-c", "node packages/db/dist/migrate.js && node packages/indexer/dist/index.js"]
