@@ -268,3 +268,43 @@ export async function getTransfersList(
 ): Promise<TransfersResponse> {
   return fetchJson(`/api/transfers?limit=${limit}&offset=${offset}`);
 }
+
+// ---- Indexer Status ----
+
+export interface IndexerStatusResponse {
+  startedAt: number;
+  uptimeSeconds: number;
+  state: "idle" | "syncing" | "live";
+  blocksProcessed: number;
+  indexedHeight: number;
+  chainTip: number;
+  blocksRemaining: number;
+  syncPercent: number;
+  blocksPerMinute: number;
+  blocksPerHour: number;
+  etaSeconds: number | null;
+  errorCount: number;
+  memory: {
+    rss: number;
+    heapUsed: number;
+    heapTotal: number;
+    external: number;
+  };
+  database: {
+    totalSize: string;
+    tables: { name: string; rows: number; size: string }[];
+  };
+  rpc: {
+    endpointCount: number;
+    endpoints: {
+      url: string;
+      healthy: boolean;
+      successes: number;
+      failures: number;
+    }[];
+  };
+}
+
+export async function getIndexerStatus(): Promise<IndexerStatusResponse> {
+  return fetchJson("/api/indexer-status");
+}

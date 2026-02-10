@@ -23,8 +23,10 @@ import {
   getChainStats,
   getLatestTransfers,
   getTransfersList,
+  getDatabaseSize,
 } from "@polka-xplo/db";
 import { detectSearchType, normalizeAddress } from "@polka-xplo/shared";
+import { metrics } from "../metrics.js";
 
 /**
  * The API server exposes indexed blockchain data to the frontend.
@@ -142,6 +144,36 @@ export function createApiServer(
       endpointCount: rpcPool.size,
       endpoints: rpcPool.getStats(),
     });
+  });
+
+  /**
+   * @openapi
+   * /api/indexer-status:
+   *   get:
+   *     tags: [System]
+   *     summary: Indexer status and metrics
+   *     description: Returns comprehensive indexer metrics including sync progress, throughput, memory usage, database size, and RPC health.
+   *     responses:
+   *       200:
+   *         description: Indexer status snapshot
+   */
+  app.get("/api/indexer-status", async (_req, res) => {
+    try {
+      const [snapshot, dbSize] = await Promise.all([
+        Promise.resolve(metrics.getSnapshot()),
+        getDatabaseSize(),
+      ]);
+      const rpcHealth = rpcPool
+        ? { endpointCount: rpcPool.size, endpoints: rpcPool.getStats() }
+        : { endpointCount: 0, endpoints: [] };
+      res.json({
+        ...snapshot,
+        database: dbSize,
+        rpc: rpcHealth,
+      });
+    } catch (err) {
+      res.status(500).json({ error: "Failed to collect indexer status" });
+    }
   });
 
   /**

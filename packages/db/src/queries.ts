@@ -644,3 +644,34 @@ function mapEvent(row: Record<string, unknown>): ExplorerEvent {
           : { type: "Initialization" },
   };
 }
+
+// ============================================================
+// Database Size / Table Stats
+// ============================================================
+
+export async function getDatabaseSize(): Promise<{
+  totalSize: string;
+  tables: { name: string; rows: number; size: string }[];
+}> {
+  const [sizeResult, tableResult] = await Promise.all([
+    query<{ size: string }>(
+      `SELECT pg_size_pretty(pg_database_size(current_database())) as size`
+    ),
+    query<{ table_name: string; row_estimate: string; total_size: string }>(
+      `SELECT
+         relname as table_name,
+         n_live_tup as row_estimate,
+         pg_size_pretty(pg_total_relation_size(quote_ident(relname))) as total_size
+       FROM pg_stat_user_tables
+       ORDER BY pg_total_relation_size(quote_ident(relname)) DESC`
+    ),
+  ]);
+  return {
+    totalSize: sizeResult.rows[0]?.size ?? "0",
+    tables: tableResult.rows.map((r) => ({
+      name: r.table_name,
+      rows: parseInt(String(r.row_estimate), 10),
+      size: r.total_size,
+    })),
+  };
+}

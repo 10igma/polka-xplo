@@ -10,6 +10,7 @@ import {
   finalizeBlock,
 } from "@polka-xplo/db";
 import type { BlockStatus, DigestLog } from "@polka-xplo/shared";
+import { metrics } from "../metrics.js";
 
 // Blake2-256 hash for computing extrinsic tx_hash
 const require2 = createRequire(import.meta.url);
@@ -110,6 +111,7 @@ export class IngestionPipeline {
     this.running = true;
 
     console.log(`[Pipeline:${this.chainId}] Starting ingestion pipeline...`);
+    metrics.setState("syncing");
 
     // Phase 1: Backfill any missed finalized blocks
     await this.backfill();
@@ -136,6 +138,9 @@ export class IngestionPipeline {
   private async backfill(): Promise<void> {
     const dbHeight = await getLastFinalizedHeight();
     const chainTip = await this.getChainFinalizedHeight();
+
+    metrics.setChainTip(chainTip);
+    metrics.seedIndexedHeight(dbHeight);
 
     if (chainTip <= dbHeight) {
       console.log(`[Pipeline:${this.chainId}] No backfill needed. DB at ${dbHeight}, chain at ${chainTip}`);
@@ -174,6 +179,7 @@ export class IngestionPipeline {
     }
 
     await upsertIndexerState(this.chainId, chainTip, chainTip, "live");
+    metrics.setState("live");
     console.log(`[Pipeline:${this.chainId}] Backfill complete.`);
   }
 
@@ -189,7 +195,9 @@ export class IngestionPipeline {
           await this.fetchAndProcessByHash(block.hash, block.number, "finalized");
           await finalizeBlock(block.number);
           await upsertIndexerState(this.chainId, block.number, block.number, "live");
+          metrics.setChainTip(block.number);
         } catch (err) {
+          metrics.recordError();
           console.error(`[Pipeline:${this.chainId}] Error processing finalized block:`, err);
         }
       },
@@ -215,6 +223,7 @@ export class IngestionPipeline {
           console.log(`[Pipeline:${this.chainId}] Best block #${latest.number}`);
           await this.fetchAndProcessByHash(latest.hash, latest.number, "best");
         } catch (err) {
+          metrics.recordError();
           console.error(`[Pipeline:${this.chainId}] Error processing best block:`, err);
         }
       },
@@ -242,6 +251,7 @@ export class IngestionPipeline {
     }
 
     await processBlock(rawBlock, status, this.registry);
+    metrics.recordBlock(height);
   }
 
   /**

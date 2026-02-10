@@ -74,6 +74,12 @@ export function HeaderNav({ apiDocsUrl }: { apiDocsUrl: string }) {
         Chain State
       </a>
       <a
+        href="/status"
+        className="hover:text-zinc-100 transition-colors"
+      >
+        Status
+      </a>
+      <a
         href={apiDocsUrl}
         target="_blank"
         rel="noopener noreferrer"
