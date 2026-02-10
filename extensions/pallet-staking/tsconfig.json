@@ -1,0 +1,11 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "rootDir": ".",
+    "jsx": "react-jsx",
+    "declaration": true
+  },
+  "include": ["indexer/**/*.ts", "ui/**/*.ts", "ui/**/*.tsx"],
+  "exclude": ["dist", "node_modules", "migrations"]
+}

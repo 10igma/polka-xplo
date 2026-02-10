@@ -37,6 +37,8 @@ ENV NEXT_TELEMETRY_DISABLED=1
 COPY --from=build /app/packages/web/.next/standalone ./
 # Copy static assets (not included in standalone)
 COPY --from=build /app/packages/web/.next/static ./packages/web/.next/static
+# Copy public/ folder for favicon, images, and other static assets
+COPY --from=build /app/packages/web/public ./packages/web/public
 
 EXPOSE 3000
 

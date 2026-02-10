@@ -12,8 +12,15 @@ import { query, transaction, type DbClient } from "./client.js";
 // Block Queries
 // ============================================================
 
-export async function insertBlock(block: Block): Promise<void> {
-  await query(
+/** Queryable interface: either the pool or a transaction client */
+type Queryable = { query: (text: string, params?: unknown[]) => Promise<unknown> };
+
+function exec(sql: string, params: unknown[], client?: Queryable): Promise<unknown> {
+  return client ? client.query(sql, params) : query(sql, params);
+}
+
+export async function insertBlock(block: Block, client?: DbClient): Promise<void> {
+  await exec(
     `INSERT INTO blocks (height, hash, parent_hash, state_root, extrinsics_root, timestamp, validator_id, status, spec_version, event_count, extrinsic_count)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
      ON CONFLICT (height) DO UPDATE SET
@@ -34,7 +41,8 @@ export async function insertBlock(block: Block): Promise<void> {
       block.specVersion,
       block.eventCount,
       block.extrinsicCount,
-    ]
+    ],
+    client
   );
 }
 
@@ -112,8 +120,8 @@ export async function pruneForkedBlocks(fromHeight: number): Promise<void> {
 // Extrinsic Queries
 // ============================================================
 
-export async function insertExtrinsic(ext: Extrinsic): Promise<void> {
-  await query(
+export async function insertExtrinsic(ext: Extrinsic, client?: DbClient): Promise<void> {
+  await exec(
     `INSERT INTO extrinsics (id, block_height, tx_hash, index, signer, module, call, args, success, fee, tip)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
      ON CONFLICT (id) DO UPDATE SET
@@ -132,7 +140,8 @@ export async function insertExtrinsic(ext: Extrinsic): Promise<void> {
       ext.success,
       ext.fee,
       ext.tip,
-    ]
+    ],
+    client
   );
 }
 
@@ -175,12 +184,12 @@ export async function getExtrinsicsBySigner(
 // Event Queries
 // ============================================================
 
-export async function insertEvent(evt: ExplorerEvent): Promise<void> {
+export async function insertEvent(evt: ExplorerEvent, client?: DbClient): Promise<void> {
   const phaseType = evt.phase.type;
   const phaseIndex =
     evt.phase.type === "ApplyExtrinsic" ? evt.phase.index : null;
 
-  await query(
+  await exec(
     `INSERT INTO events (id, block_height, extrinsic_id, index, module, event, data, phase_type, phase_index)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
      ON CONFLICT (id) DO NOTHING`,
@@ -194,7 +203,8 @@ export async function insertEvent(evt: ExplorerEvent): Promise<void> {
       JSON.stringify(evt.data),
       phaseType,
       phaseIndex,
-    ]
+    ],
+    client
   );
 }
 
@@ -227,15 +237,17 @@ export async function getEventsByExtrinsic(
 export async function upsertAccount(
   address: string,
   publicKey: string,
-  blockHeight: number
+  blockHeight: number,
+  client?: DbClient
 ): Promise<void> {
-  await query(
+  await exec(
     `INSERT INTO accounts (address, public_key, last_active_block, created_at_block)
      VALUES ($1, $2, $3, $3)
      ON CONFLICT (address) DO UPDATE SET
        last_active_block = GREATEST(accounts.last_active_block, EXCLUDED.last_active_block),
        updated_at = NOW()`,
-    [address, publicKey, blockHeight]
+    [address, publicKey, blockHeight],
+    client
   );
 }
 

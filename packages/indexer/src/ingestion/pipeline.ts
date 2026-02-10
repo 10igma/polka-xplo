@@ -81,18 +81,23 @@ export class IngestionPipeline {
     await upsertIndexerState(this.chainId, dbHeight, dbHeight, "syncing");
 
     const BATCH_SIZE = parseInt(process.env.BATCH_SIZE ?? "100", 10);
+    const CONCURRENCY = Math.min(parseInt(process.env.BACKFILL_CONCURRENCY ?? "10", 10), BATCH_SIZE);
 
     for (let start = dbHeight + 1; start <= chainTip; start += BATCH_SIZE) {
       if (!this.running) break;
 
       const end = Math.min(start + BATCH_SIZE - 1, chainTip);
-      const blockPromises: Promise<void>[] = [];
 
+      // Process blocks with bounded concurrency to avoid overwhelming RPC/DB
+      const heights: number[] = [];
       for (let height = start; height <= end; height++) {
-        blockPromises.push(this.fetchAndProcessByHash(null, height, "finalized"));
+        heights.push(height);
       }
-
-      await Promise.all(blockPromises);
+      await this.runWithConcurrency(
+        heights,
+        (height) => this.fetchAndProcessByHash(null, height, "finalized"),
+        CONCURRENCY
+      );
 
       await upsertIndexerState(this.chainId, end, end, "syncing");
 
@@ -249,7 +254,9 @@ export class IngestionPipeline {
 
   /**
    * Resolve a block hash from a block number.
-   * Checks finalized and best blocks known to the PAPI client.
+   * Checks finalized and best blocks known to the PAPI client,
+   * then falls back to the legacy `chain_getBlockHash` RPC method
+   * for historical blocks during backfill.
    */
   private async resolveBlockHash(height: number): Promise<string | null> {
     try {
@@ -263,17 +270,63 @@ export class IngestionPipeline {
       const match = bestBlocks.find((b) => b.number === height);
       if (match) return match.hash;
 
-      // For deeper historical blocks, PAPI descriptors or a direct
-      // JSON-RPC chainHead call is needed. Log and skip for now.
+      // Fall back to legacy JSON-RPC for historical block hash resolution.
+      // This uses the `chain_getBlockHash` method which is available on
+      // both full and archive nodes.
+      const rpcUrl = this.papiClient.chainConfig.rpc[0];
+      const hash = await this.rpcGetBlockHash(rpcUrl, height);
+      if (hash) return hash;
+
       console.warn(
-        `[Pipeline:${this.chainId}] Cannot resolve hash for block #${height}. ` +
-          `Generate PAPI descriptors for full historical backfill.`
+        `[Pipeline:${this.chainId}] Cannot resolve hash for block #${height} via any method.`
       );
       return null;
     } catch (err) {
       console.error(`[Pipeline:${this.chainId}] resolveBlockHash(${height}) failed:`, err);
       return null;
     }
+  }
+
+  /** Call chain_getBlockHash via direct JSON-RPC */
+  private async rpcGetBlockHash(rpcUrl: string, height: number): Promise<string | null> {
+    // Convert WSS URL to HTTPS for JSON-RPC calls
+    const httpUrl = rpcUrl.replace(/^wss:\/\//, "https://").replace(/^ws:\/\//, "http://");
+    try {
+      const res = await fetch(httpUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: 1,
+          method: "chain_getBlockHash",
+          params: [height],
+        }),
+      });
+      const json = await res.json() as { result?: string; error?: unknown };
+      if (json.result && typeof json.result === "string") {
+        return json.result;
+      }
+      return null;
+    } catch (err) {
+      console.warn(`[Pipeline:${this.chainId}] RPC chain_getBlockHash(${height}) failed:`, err);
+      return null;
+    }
+  }
+
+  /** Run tasks with bounded concurrency */
+  private async runWithConcurrency<T>(
+    items: T[],
+    fn: (item: T) => Promise<void>,
+    concurrency: number
+  ): Promise<void> {
+    let index = 0;
+    const workers = Array.from({ length: Math.min(concurrency, items.length) }, async () => {
+      while (index < items.length) {
+        const i = index++;
+        await fn(items[i]);
+      }
+    });
+    await Promise.all(workers);
   }
 
   private async getChainFinalizedHeight(): Promise<number> {

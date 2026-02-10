@@ -19,9 +19,35 @@ function findMigrationsDir(): string {
   );
 }
 
+async function ensureMigrationsTable(): Promise<void> {
+  await query(`
+    CREATE TABLE IF NOT EXISTS schema_migrations (
+      filename TEXT PRIMARY KEY,
+      applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+}
+
+async function getAppliedMigrations(): Promise<Set<string>> {
+  const result = await query<{ filename: string }>(
+    `SELECT filename FROM schema_migrations ORDER BY filename`
+  );
+  return new Set(result.rows.map((r) => r.filename));
+}
+
+async function recordMigration(filename: string): Promise<void> {
+  await query(
+    `INSERT INTO schema_migrations (filename) VALUES ($1) ON CONFLICT DO NOTHING`,
+    [filename]
+  );
+}
+
 async function runMigrations(): Promise<void> {
   console.log("[DB] Running migrations...");
   createPool();
+
+  await ensureMigrationsTable();
+  const applied = await getAppliedMigrations();
 
   const migrationsDir = findMigrationsDir();
   console.log(`[DB] Using migrations from: ${migrationsDir}`);
@@ -30,14 +56,21 @@ async function runMigrations(): Promise<void> {
     .filter((f) => f.endsWith(".sql"))
     .sort();
 
+  let newCount = 0;
   for (const file of files) {
+    if (applied.has(file)) {
+      console.log(`[DB] Already applied: ${file}`);
+      continue;
+    }
     console.log(`[DB] Applying migration: ${file}`);
     const sql = fs.readFileSync(path.join(migrationsDir, file), "utf-8");
     await query(sql);
+    await recordMigration(file);
     console.log(`[DB] Applied: ${file}`);
+    newCount++;
   }
 
-  console.log("[DB] All migrations applied.");
+  console.log(`[DB] Migrations complete. ${newCount} new, ${files.length - newCount} already applied.`);
   await closePool();
 }
 
