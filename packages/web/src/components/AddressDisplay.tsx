@@ -24,10 +24,7 @@ export function AddressDisplay({
 
   if (link) {
     return (
-      <a
-        href={`/account/${address}`}
-        className={`text-accent hover:underline ${className}`}
-      >
+      <a href={`/account/${address}`} className={`text-accent hover:underline ${className}`}>
         {display}
       </a>
     );

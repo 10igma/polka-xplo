@@ -45,11 +45,7 @@ export const DEFAULT_CHAINS: ChainConfig[] = [
   {
     id: "ajuna",
     name: "Ajuna Network",
-    rpc: [
-      "wss://rpc-para.ajuna.network",
-      "wss://ajuna.ibp.network",
-      "wss://ajuna.dotters.network",
-    ],
+    rpc: ["wss://rpc-para.ajuna.network", "wss://ajuna.ibp.network", "wss://ajuna.dotters.network"],
     addressPrefix: 1328,
     tokenSymbol: "AJUN",
     tokenDecimals: 12,
@@ -66,19 +62,12 @@ export const DEFAULT_CONFIG: ExplorerConfig = {
 };
 
 /** Get chain config by ID */
-export function getChainConfig(
-  config: ExplorerConfig,
-  chainId: string
-): ChainConfig | undefined {
+export function getChainConfig(config: ExplorerConfig, chainId: string): ChainConfig | undefined {
   return config.chains.find((c) => c.id === chainId);
 }
 
 /** Format a token amount with proper decimals */
-export function formatTokenAmount(
-  raw: string | bigint,
-  decimals: number,
-  symbol: string
-): string {
+export function formatTokenAmount(raw: string | bigint, decimals: number, symbol: string): string {
   const value = typeof raw === "string" ? BigInt(raw) : raw;
   const divisor = BigInt(10 ** decimals);
   const whole = value / divisor;
@@ -88,9 +77,7 @@ export function formatTokenAmount(
 }
 
 /** Detect search input type heuristically */
-export function detectSearchType(
-  input: string
-): "hash" | "blockNumber" | "address" | "unknown" {
+export function detectSearchType(input: string): "hash" | "blockNumber" | "address" | "unknown" {
   const trimmed = input.trim();
 
   // Block hash: starts with 0x and is 66 chars (32 bytes)

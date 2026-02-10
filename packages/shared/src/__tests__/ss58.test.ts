@@ -8,8 +8,7 @@ import {
 } from "../ss58.js";
 
 // A well-known Polkadot address and its raw hex public key (Alice)
-const ALICE_HEX =
-  "0xd43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d";
+const ALICE_HEX = "0xd43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d";
 
 // ---------------------------------------------------------------------------
 // ss58Decode

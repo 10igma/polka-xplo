@@ -33,9 +33,7 @@ export default async function BlocksPage({
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold text-zinc-100">Blocks</h1>
         {blocks && (
-          <span className="text-sm text-zinc-400">
-            {blocks.total.toLocaleString()} total
-          </span>
+          <span className="text-sm text-zinc-400">{blocks.total.toLocaleString()} total</span>
         )}
       </div>
 
@@ -51,11 +49,7 @@ export default async function BlocksPage({
             <BlocksTable blocks={blocks.data} />
           </div>
 
-          <Pagination
-            currentPage={page}
-            totalPages={totalPages}
-            basePath="/blocks"
-          />
+          <Pagination currentPage={page} totalPages={totalPages} basePath="/blocks" />
         </>
       )}
 

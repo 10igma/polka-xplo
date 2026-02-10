@@ -32,11 +32,7 @@ export default async function LogsPage({
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold text-zinc-100">Logs</h1>
-        {logs && (
-          <span className="text-sm text-zinc-400">
-            {logs.total.toLocaleString()} total
-          </span>
-        )}
+        {logs && <span className="text-sm text-zinc-400">{logs.total.toLocaleString()} total</span>}
       </div>
 
       {error && (
@@ -51,11 +47,7 @@ export default async function LogsPage({
             <LogsTable logs={logs.data} />
           </div>
 
-          <Pagination
-            currentPage={page}
-            totalPages={totalPages}
-            basePath="/logs"
-          />
+          <Pagination currentPage={page} totalPages={totalPages} basePath="/logs" />
         </>
       )}
 

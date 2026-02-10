@@ -38,7 +38,7 @@ import { getRuntimeSummary } from "../runtime-parser.js";
 export function createApiServer(
   registry: PluginRegistry,
   chainId: string,
-  rpcPool?: RpcPool
+  rpcPool?: RpcPool,
 ): express.Express {
   const app = express();
 
@@ -59,7 +59,11 @@ export function createApiServer(
     },
     apis: [fileURLToPath(import.meta.url)], // scan this file for JSDoc comments
   });
-  app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec, { customCss: ".swagger-ui .topbar { display: none }" }));
+  app.use(
+    "/api-docs",
+    swaggerUi.serve,
+    swaggerUi.setup(swaggerSpec, { customCss: ".swagger-ui .topbar { display: none }" }),
+  );
   app.get("/api-docs.json", (_req, res) => res.json(swaggerSpec));
 
   // CORS — configurable via CORS_ORIGIN env var (defaults to * for local dev)
@@ -174,7 +178,7 @@ export function createApiServer(
         database: dbSize,
         rpc: rpcHealth,
       });
-    } catch (err) {
+    } catch {
       res.status(500).json({ error: "Failed to collect indexer status" });
     }
   });
@@ -194,7 +198,7 @@ export function createApiServer(
     try {
       const versions = await getSpecVersions();
       res.json({ versions });
-    } catch (err) {
+    } catch {
       res.status(500).json({ error: "Failed to fetch spec versions" });
     }
   });
@@ -308,7 +312,7 @@ export function createApiServer(
         pageSize: limit,
         hasMore: offset + limit < result.total,
       });
-    } catch (err) {
+    } catch {
       res.status(500).json({ error: "Failed to fetch blocks" });
     }
   });
@@ -355,7 +359,9 @@ export function createApiServer(
       const { id } = req.params;
       // Validate: must be a block number or a 0x-prefixed hash
       if (!/^\d+$/.test(id) && !/^0x[0-9a-fA-F]{64}$/.test(id)) {
-        res.status(400).json({ error: "Invalid block identifier — expected a block number or 0x-prefixed hash" });
+        res.status(400).json({
+          error: "Invalid block identifier — expected a block number or 0x-prefixed hash",
+        });
         return;
       }
       const block = /^\d+$/.test(id)
@@ -373,7 +379,7 @@ export function createApiServer(
       ]);
 
       res.json({ block, extrinsics, events });
-    } catch (err) {
+    } catch {
       res.status(500).json({ error: "Failed to fetch block" });
     }
   });
@@ -414,7 +420,7 @@ export function createApiServer(
         pageSize: limit,
         hasMore: offset + limit < result.total,
       });
-    } catch (err) {
+    } catch {
       res.status(500).json({ error: "Failed to fetch extrinsics" });
     }
   });
@@ -482,7 +488,7 @@ export function createApiServer(
         blockTimestamp: block?.timestamp ?? null,
         blockHash: block?.hash ?? null,
       });
-    } catch (err) {
+    } catch {
       res.status(500).json({ error: "Failed to fetch extrinsic" });
     }
   });
@@ -558,7 +564,7 @@ export function createApiServer(
         pageSize: limit,
         hasMore: offset + limit < result.total,
       });
-    } catch (err) {
+    } catch {
       res.status(500).json({ error: "Failed to fetch accounts" });
     }
   });
@@ -609,7 +615,9 @@ export function createApiServer(
       // Normalize SS58 or hex input to canonical hex public key
       const hexKey = normalizeAddress(address);
       if (!hexKey) {
-        res.status(400).json({ error: "Invalid address — could not decode SS58 or hex public key" });
+        res
+          .status(400)
+          .json({ error: "Invalid address — could not decode SS58 or hex public key" });
         return;
       }
 
@@ -632,7 +640,7 @@ export function createApiServer(
         balance: account.balance,
         recentExtrinsics,
       });
-    } catch (err) {
+    } catch {
       res.status(500).json({ error: "Failed to fetch account" });
     }
   });
@@ -667,7 +675,7 @@ export function createApiServer(
     try {
       const stats = await getChainStats();
       res.json(stats);
-    } catch (err) {
+    } catch {
       res.status(500).json({ error: "Failed to fetch stats" });
     }
   });
@@ -725,7 +733,7 @@ export function createApiServer(
         pageSize: limit,
         hasMore: offset + limit < result.total,
       });
-    } catch (err) {
+    } catch {
       res.status(500).json({ error: "Failed to fetch transfers" });
     }
   });
@@ -770,7 +778,7 @@ export function createApiServer(
         pageSize: limit,
         hasMore: offset + limit < result.total,
       });
-    } catch (err) {
+    } catch {
       res.status(500).json({ error: "Failed to fetch digest logs" });
     }
   });
@@ -816,7 +824,7 @@ export function createApiServer(
         pageSize: limit,
         hasMore: offset + limit < result.total,
       });
-    } catch (err) {
+    } catch {
       res.status(500).json({ error: "Failed to fetch events" });
     }
   });
@@ -937,7 +945,7 @@ export function createApiServer(
       }
 
       res.json({ results });
-    } catch (err) {
+    } catch {
       res.status(500).json({ error: "Search failed" });
     }
   });

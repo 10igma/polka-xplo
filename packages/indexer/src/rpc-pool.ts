@@ -30,14 +30,12 @@ export interface RpcCallResult<T = unknown> {
   endpoint: string;
 }
 
-const SUSPENSION_BASE_MS = 5_000;    // 5 seconds initial suspension
-const SUSPENSION_MAX_MS  = 120_000;  // 2 minute max suspension
-const MAX_FAILURES       = 3;        // Suspend after 3 consecutive failures
+const SUSPENSION_BASE_MS = 5_000; // 5 seconds initial suspension
+const SUSPENSION_MAX_MS = 120_000; // 2 minute max suspension
+const MAX_FAILURES = 3; // Suspend after 3 consecutive failures
 
 function toHttpUrl(url: string): string {
-  return url
-    .replace(/^wss:\/\//, "https://")
-    .replace(/^ws:\/\//, "http://");
+  return url.replace(/^wss:\/\//, "https://").replace(/^ws:\/\//, "http://");
 }
 
 export class RpcPool {
@@ -99,9 +97,7 @@ export class RpcPool {
     }
 
     // All suspended — unsuspend the one with the earliest suspendedUntil
-    const earliest = this.endpoints.reduce((a, b) =>
-      a.suspendedUntil < b.suspendedUntil ? a : b
-    );
+    const earliest = this.endpoints.reduce((a, b) => (a.suspendedUntil < b.suspendedUntil ? a : b));
     earliest.suspendedUntil = 0;
     earliest.failures = 0;
     return earliest;
@@ -123,11 +119,11 @@ export class RpcPool {
       // Exponential backoff: 5s, 10s, 20s, 40s, ... up to 120s
       const backoff = Math.min(
         SUSPENSION_BASE_MS * Math.pow(2, ep.failures - MAX_FAILURES),
-        SUSPENSION_MAX_MS
+        SUSPENSION_MAX_MS,
       );
       ep.suspendedUntil = Date.now() + backoff;
       console.warn(
-        `[RpcPool] Suspending ${ep.httpUrl} for ${backoff / 1000}s after ${ep.failures} failures`
+        `[RpcPool] Suspending ${ep.httpUrl} for ${backoff / 1000}s after ${ep.failures} failures`,
       );
     }
   }
@@ -154,7 +150,10 @@ export class RpcPool {
           throw new Error(`HTTP ${res.status}: ${res.statusText}`);
         }
 
-        const json = (await res.json()) as { result?: T; error?: { code: number; message: string } };
+        const json = (await res.json()) as {
+          result?: T;
+          error?: { code: number; message: string };
+        };
 
         if (json.error) {
           throw new Error(`RPC ${method} error: ${json.error.message} (code ${json.error.code})`);
@@ -166,13 +165,13 @@ export class RpcPool {
         this.markFailed(ep);
         lastError = err instanceof Error ? err : new Error(String(err));
         console.warn(
-          `[RpcPool] ${ep.httpUrl} failed for ${method}: ${lastError.message} (attempt ${attempt + 1}/${maxAttempts})`
+          `[RpcPool] ${ep.httpUrl} failed for ${method}: ${lastError.message} (attempt ${attempt + 1}/${maxAttempts})`,
         );
       }
     }
 
     throw new Error(
-      `[RpcPool] All ${maxAttempts} endpoints failed for ${method}: ${lastError?.message}`
+      `[RpcPool] All ${maxAttempts} endpoints failed for ${method}: ${lastError?.message}`,
     );
   }
 

@@ -38,25 +38,20 @@ export function AccountsTable({
             const identity = account.identity?.display;
             const totalBalance = account.balance
               ? (
-                  BigInt(account.balance.free || "0") +
-                  BigInt(account.balance.reserved || "0")
+                  BigInt(account.balance.free || "0") + BigInt(account.balance.reserved || "0")
                 ).toString()
               : null;
 
             return (
               <tr key={account.address} className="table-row">
                 {/* Rank */}
-                <td className="py-2.5 pr-4 text-zinc-500 font-mono text-xs">
-                  {startRank + i}
-                </td>
+                <td className="py-2.5 pr-4 text-zinc-500 font-mono text-xs">{startRank + i}</td>
 
                 {/* Address + Identity */}
                 <td className="py-2.5 pr-4">
                   <div className="flex flex-col gap-0.5">
                     {identity && (
-                      <span className="text-zinc-200 text-xs font-medium">
-                        {identity}
-                      </span>
+                      <span className="text-zinc-200 text-xs font-medium">{identity}</span>
                     )}
                     <AddressDisplay
                       address={account.address}
@@ -69,9 +64,11 @@ export function AccountsTable({
 
                 {/* Balance */}
                 <td className="py-2.5 pr-4 text-right font-mono text-zinc-300">
-                  {totalBalance
-                    ? formatBalance(totalBalance, tokenDecimals, tokenSymbol)
-                    : <span className="text-zinc-600">&mdash;</span>}
+                  {totalBalance ? (
+                    formatBalance(totalBalance, tokenDecimals, tokenSymbol)
+                  ) : (
+                    <span className="text-zinc-600">&mdash;</span>
+                  )}
                 </td>
 
                 {/* Extrinsic count */}

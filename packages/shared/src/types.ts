@@ -7,9 +7,9 @@ export type BlockStatus = "best" | "finalized";
 
 /** Parsed digest log from a block header */
 export interface DigestLog {
-  type: string;           // "preRuntime" | "consensus" | "seal" | "other" | "runtimeEnvironmentUpdated"
-  engine: string | null;  // 4-byte ASCII engine id, e.g. "aura", "FRNK"
-  data: string;           // hex-encoded payload
+  type: string; // "preRuntime" | "consensus" | "seal" | "other" | "runtimeEnvironmentUpdated"
+  engine: string | null; // 4-byte ASCII engine id, e.g. "aura", "FRNK"
+  data: string; // hex-encoded payload
 }
 
 /** Core block record stored in the database */
@@ -144,15 +144,9 @@ export interface BlockContext {
   specVersion: number;
 }
 
-export type EventHandler = (
-  ctx: BlockContext,
-  event: ExplorerEvent
-) => Promise<void>;
+export type EventHandler = (ctx: BlockContext, event: ExplorerEvent) => Promise<void>;
 
-export type ExtrinsicHandler = (
-  ctx: BlockContext,
-  extrinsic: Extrinsic
-) => Promise<void>;
+export type ExtrinsicHandler = (ctx: BlockContext, extrinsic: Extrinsic) => Promise<void>;
 
 export type BlockHandler = (ctx: BlockContext, block: Block) => Promise<void>;
 

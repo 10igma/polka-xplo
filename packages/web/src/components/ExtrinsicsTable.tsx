@@ -71,13 +71,18 @@ export function ExtrinsicsTable({
                 )}
               </td>
               <td className="py-2.5 pr-4 text-right font-mono text-xs text-zinc-300">
-                {ext.fee
-                  ? formatBalance(ext.fee, tokenDecimals, tokenSymbol)
-                  : <span className="text-zinc-600">&mdash;</span>}
+                {ext.fee ? (
+                  formatBalance(ext.fee, tokenDecimals, tokenSymbol)
+                ) : (
+                  <span className="text-zinc-600">&mdash;</span>
+                )}
               </td>
               <td className="py-2.5 text-center">
                 {ext.success ? (
-                  <span className="inline-block w-2 h-2 rounded-full bg-green-500" title="Success" />
+                  <span
+                    className="inline-block w-2 h-2 rounded-full bg-green-500"
+                    title="Success"
+                  />
                 ) : (
                   <span className="inline-block w-2 h-2 rounded-full bg-red-500" title="Failed" />
                 )}

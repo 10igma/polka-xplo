@@ -36,9 +36,7 @@ export default async function ExtrinsicsPage({
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold text-zinc-100">Extrinsics</h1>
         {extrinsics && (
-          <span className="text-sm text-zinc-400">
-            {extrinsics.total.toLocaleString()} total
-          </span>
+          <span className="text-sm text-zinc-400">{extrinsics.total.toLocaleString()} total</span>
         )}
       </div>
 

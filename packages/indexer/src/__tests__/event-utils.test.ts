@@ -163,8 +163,7 @@ describe("enrichExtrinsicsFromEvents", () => {
 // extractAccountsFromEvent
 // ---------------------------------------------------------------------------
 
-const VALID_HEX =
-  "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef";
+const VALID_HEX = "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef";
 
 describe("extractAccountsFromEvent", () => {
   it("extracts from and to from Balances.Transfer", () => {
@@ -173,7 +172,7 @@ describe("extractAccountsFromEvent", () => {
         module: "Balances",
         event: "Transfer",
         data: { from: VALID_HEX, to: VALID_HEX.replace(/1/g, "a") },
-      })
+      }),
     );
     expect(result).toHaveLength(2);
     expect(result[0]).toBe(VALID_HEX);
@@ -185,7 +184,7 @@ describe("extractAccountsFromEvent", () => {
         module: "Balances",
         event: "Deposit",
         data: { who: VALID_HEX },
-      })
+      }),
     );
     expect(result).toEqual([VALID_HEX]);
   });
@@ -196,7 +195,7 @@ describe("extractAccountsFromEvent", () => {
         module: "Balances",
         event: "Withdraw",
         data: { who: VALID_HEX },
-      })
+      }),
     );
     expect(result).toEqual([VALID_HEX]);
   });
@@ -207,7 +206,7 @@ describe("extractAccountsFromEvent", () => {
         module: "Balances",
         event: "Endowed",
         data: { who: VALID_HEX, account: VALID_HEX },
-      })
+      }),
     );
     expect(result).toHaveLength(2);
   });
@@ -218,7 +217,7 @@ describe("extractAccountsFromEvent", () => {
         module: "System",
         event: "NewAccount",
         data: { account: VALID_HEX },
-      })
+      }),
     );
     expect(result).toEqual([VALID_HEX]);
   });
@@ -229,7 +228,7 @@ describe("extractAccountsFromEvent", () => {
         module: "System",
         event: "KilledAccount",
         data: { account: VALID_HEX },
-      })
+      }),
     );
     expect(result).toEqual([VALID_HEX]);
   });
@@ -240,7 +239,7 @@ describe("extractAccountsFromEvent", () => {
         module: "Staking",
         event: "Rewarded",
         data: { stash: VALID_HEX },
-      })
+      }),
     );
     expect(result).toEqual([VALID_HEX]);
   });
@@ -251,7 +250,7 @@ describe("extractAccountsFromEvent", () => {
         module: "Staking",
         event: "Slashed",
         data: { staker: VALID_HEX },
-      })
+      }),
     );
     expect(result).toEqual([VALID_HEX]);
   });
@@ -262,7 +261,7 @@ describe("extractAccountsFromEvent", () => {
         module: "Balances",
         event: "Transfer",
         data: { from: "not-hex", to: VALID_HEX },
-      })
+      }),
     );
     expect(result).toEqual([VALID_HEX]);
   });
@@ -273,7 +272,7 @@ describe("extractAccountsFromEvent", () => {
         module: "Balances",
         event: "Transfer",
         data: { from: "0x1234", to: VALID_HEX },
-      })
+      }),
     );
     expect(result).toEqual([VALID_HEX]);
   });
@@ -284,14 +283,14 @@ describe("extractAccountsFromEvent", () => {
         module: "Contracts",
         event: "Instantiated",
         data: { deployer: VALID_HEX },
-      })
+      }),
     );
     expect(result).toEqual([]);
   });
 
   it("returns empty when data is null", () => {
     const result = extractAccountsFromEvent(
-      makeEvent({ module: "Balances", event: "Transfer", data: null as any })
+      makeEvent({ module: "Balances", event: "Transfer", data: null as any }),
     );
     expect(result).toEqual([]);
   });

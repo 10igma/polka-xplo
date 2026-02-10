@@ -22,10 +22,7 @@ export type { RawExtrinsic, RawEvent };
  * 1. TransactionPayment.TransactionFeePaid → actual_fee  (most chains)
  * 2. Balances.Withdraw on a signed extrinsic → amount     (Ajuna / older runtimes)
  */
-export function enrichExtrinsicsFromEvents(
-  extrinsics: RawExtrinsic[],
-  events: RawEvent[]
-): void {
+export function enrichExtrinsicsFromEvents(extrinsics: RawExtrinsic[], events: RawEvent[]): void {
   for (const evt of events) {
     if (evt.extrinsicIndex == null) continue;
     const ext = extrinsics[evt.extrinsicIndex];
@@ -40,12 +37,7 @@ export function enrichExtrinsicsFromEvents(
       if (fee != null) ext.fee = String(fee);
     }
     // Fallback: Balances.Withdraw on a signed extrinsic is the fee deduction
-    if (
-      evt.module === "Balances" &&
-      evt.event === "Withdraw" &&
-      ext.signer &&
-      ext.fee == null
-    ) {
+    if (evt.module === "Balances" && evt.event === "Withdraw" && ext.signer && ext.fee == null) {
       const amount = evt.data?.amount;
       if (amount != null) ext.fee = String(amount);
     }

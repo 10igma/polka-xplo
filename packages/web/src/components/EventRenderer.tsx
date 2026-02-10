@@ -1,6 +1,6 @@
 "use client";
 
-import React, { Suspense, lazy } from "react";
+import React, { Suspense } from "react";
 import { JsonView } from "./JsonView";
 
 interface EventData {
@@ -40,11 +40,7 @@ export function EventRenderer({ module, event, data }: EventData) {
 
   if (PluginComponent) {
     return (
-      <Suspense
-        fallback={
-          <div className="animate-pulse h-20 rounded-lg bg-zinc-800" />
-        }
-      >
+      <Suspense fallback={<div className="animate-pulse h-20 rounded-lg bg-zinc-800" />}>
         <PluginComponent data={data} />
       </Suspense>
     );

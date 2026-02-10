@@ -11,12 +11,12 @@ The project is architecturally sound — TypeScript monorepo with clean package 
 
 This review identifies **23 findings** (12 fixed ✅, 11 remaining) with the following priority distribution:
 
-| Priority | Count | Fixed | Remaining |
-|----------|-------|-------|-----------|
-| 🔴 Critical | 3 | 1 ✅ | 2 |
-| 🟠 High | 5 | 2 ✅ | 3 |
-| 🟡 Medium | 8 | 4 ✅ | 4 |
-| 🟢 Low | 7 | 5 ✅ | 2 |
+| Priority    | Count | Fixed | Remaining |
+| ----------- | ----- | ----- | --------- |
+| 🔴 Critical | 3     | 1 ✅  | 2         |
+| 🟠 High     | 5     | 2 ✅  | 3         |
+| 🟡 Medium   | 8     | 4 ✅  | 4         |
+| 🟢 Low      | 7     | 5 ✅  | 2         |
 
 ---
 
@@ -39,11 +39,13 @@ This review identifies **23 findings** (12 fixed ✅, 11 remaining) with the fol
 3. `manifest.json` is parsed with no JSON schema validation — malformed manifests could crash the discovery phase.
 
 **Fix (short-term):**
+
 - Wrap migration SQL in a transaction with rollback on failure
 - Validate manifests against a JSON Schema (e.g., Ajv)
 - Add a config allowlist for trusted extension IDs
 
 **Fix (long-term):**
+
 - Consider `vm2` or `isolated-vm` for sandboxed plugin execution
 - Or accept the trust model and document that extensions run with full privileges (like VS Code extensions)
 
@@ -57,12 +59,13 @@ This review identifies **23 findings** (12 fixed ✅, 11 remaining) with the fol
 If an extension's migration SQL partially succeeds (e.g., first table created, second fails), the `extension_migrations` record is never inserted. On retry, the registry attempts the full migration again, hitting `CREATE TABLE` conflicts or, worse, `ALTER TABLE` errors that leave the schema in an unrecoverable state.
 
 **Fix:** Wrap each extension migration in a transaction:
+
 ```typescript
 await transaction(async (client) => {
   await client.query(sql);
   await client.query(
     `INSERT INTO extension_migrations (extension_id, version) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
-    [ext.manifest.id, ext.manifest.version]
+    [ext.manifest.id, ext.manifest.version],
   );
 });
 ```
@@ -93,6 +96,7 @@ await transaction(async (client) => {
 The `formatAddress` function detects "already SS58" addresses and passes them through unchanged. When a user switches the prefix selector (e.g., from Ajuna 1328 to generic 42), displayed SS58 addresses on-screen don't re-encode — they remain in the original prefix format.
 
 **Fix:** Decode existing SS58 to a raw public key, then re-encode with the current prefix:
+
 ```typescript
 if (!raw.startsWith("0x")) {
   const decoded = ss58Decode(raw); // extract public key bytes
@@ -110,6 +114,7 @@ if (!raw.startsWith("0x")) {
 All internal links use plain `<a href="...">` instead of Next.js `<Link>` component. This bypasses the App Router's client-side navigation, triggering full page reloads on every click. Users lose scroll position, SS58 prefix selection resets, and the browser re-fetches all JavaScript bundles.
 
 **Fix:** Replace `<a href>` with Next.js `<Link>` across all components. Example:
+
 ```tsx
 import Link from "next/link";
 // Before: <a href="/blocks">Blocks</a>
@@ -126,6 +131,7 @@ import Link from "next/link";
 Every paginated query runs a parallel `SELECT COUNT(*) FROM [table]`. On PostgreSQL, `COUNT(*)` does a full sequential scan (no index-only optimization). At millions of blocks/events/extrinsics, this becomes the dominant query cost — often taking 2-10 seconds.
 
 **Fix options (in order of effort):**
+
 1. **Cache counts in Redis/memory** with a short TTL (30s)
 2. **Use `pg_stat_user_tables.n_live_tup`** for approximate counts (already used in `getDatabaseSize`)
 3. **Remove exact total from paginated responses** — use cursor-based pagination ("has next page" only)
@@ -143,9 +149,10 @@ Every paginated query runs a parallel `SELECT COUNT(*) FROM [table]`. On Postgre
 The Express API has no rate limiting. A single client can flood `/api/blocks?limit=100` or `/api/search` with rapid requests, overwhelming the database connection pool (max 20).
 
 **Fix:** Add `express-rate-limit` middleware:
+
 ```typescript
-import rateLimit from 'express-rate-limit';
-app.use('/api/', rateLimit({ windowMs: 60_000, max: 200 }));
+import rateLimit from "express-rate-limit";
+app.use("/api/", rateLimit({ windowMs: 60_000, max: 200 }));
 ```
 
 ---
@@ -219,6 +226,7 @@ The indexer stores accounts using the hex public key returned by PAPI (e.g., `0x
 
 **Files:** Root `package.json`, all packages
 **Status:** Fixed — Added Vitest test suite with 84 tests across 5 test files:
+
 - `packages/indexer/src/__tests__/hex-utils.test.ts` — `hexToBytes`, `bytesToHex` round-trip tests
 - `packages/indexer/src/__tests__/event-utils.test.ts` — `enrichExtrinsicsFromEvents`, `extractAccountsFromEvent` tests
 - `packages/shared/src/__tests__/ss58.test.ts` — SS58 encode/decode/validate utilities
@@ -293,38 +301,27 @@ Several patterns in the codebase access array elements by index without null che
 
 The current architecture is appropriate for chains with < 10M blocks. Beyond that:
 
-| Component | Bottleneck | Threshold | Mitigation |
-|-----------|-----------|-----------|------------|
-| `COUNT(*)` queries | Sequential scan | ~5M rows | Approximate counts or caching |
-| `events` table | Table size | ~20M rows | [Table partitioning by block range](https://www.postgresql.org/docs/16/ddl-partitioning.html) |
-| Backfill | Single-process | ~50M blocks | Worker-based horizontal scaling |
-| `getAccounts` | Correlated subquery | ~500K accounts | Materialized view for extrinsic counts |
-| Runtime metadata cache | Memory | ~50+ spec versions | LRU cache eviction |
+| Component              | Bottleneck          | Threshold          | Mitigation                                                                                    |
+| ---------------------- | ------------------- | ------------------ | --------------------------------------------------------------------------------------------- |
+| `COUNT(*)` queries     | Sequential scan     | ~5M rows           | Approximate counts or caching                                                                 |
+| `events` table         | Table size          | ~20M rows          | [Table partitioning by block range](https://www.postgresql.org/docs/16/ddl-partitioning.html) |
+| Backfill               | Single-process      | ~50M blocks        | Worker-based horizontal scaling                                                               |
+| `getAccounts`          | Correlated subquery | ~500K accounts     | Materialized view for extrinsic counts                                                        |
+| Runtime metadata cache | Memory              | ~50+ spec versions | LRU cache eviction                                                                            |
 
 ---
 
 ## Recommended Fix Order
 
 **Immediate (before next release):**
+
 1. ~~C1 — Fix `runWithConcurrency` race condition~~ ✅
 2. ~~H2 — Guard `hexToBytes` against empty input~~ ✅
 3. ~~H1 — Add reconnection logic to PAPI subscriptions~~ ✅
 4. ~~M6 — Standardize pagination page numbering~~ ✅
 
-**Short-term (next sprint):**
-5. C3 — Wrap extension migrations in transactions
-6. H4 — Replace `<a>` with Next.js `<Link>`
-7. H3 — Fix SS58 prefix re-encoding
-8. ~~L2 — Switch indexer Dockerfile to `node:20-slim`~~ ✅
-9. ~~M8 — Normalize `/api/transfers` response shape~~ ✅
+**Short-term (next sprint):** 5. C3 — Wrap extension migrations in transactions 6. H4 — Replace `<a>` with Next.js `<Link>` 7. H3 — Fix SS58 prefix re-encoding 8. ~~L2 — Switch indexer Dockerfile to `node:20-slim`~~ ✅ 9. ~~M8 — Normalize `/api/transfers` response shape~~ ✅
 
-**Medium-term (next major version):**
-10. H5 — Implement COUNT caching / approximate counts
-11. M1 — Add API rate limiting
-12. ~~M2 — Configure security headers~~ ✅
-13. C2 — Validate extension manifests with JSON Schema
-14. L1 — Add test suite (Vitest)
-15. M4 — Extract shared block processing logic
+**Medium-term (next major version):** 10. H5 — Implement COUNT caching / approximate counts 11. M1 — Add API rate limiting 12. ~~M2 — Configure security headers~~ ✅ 13. C2 — Validate extension manifests with JSON Schema 14. L1 — Add test suite (Vitest) 15. M4 — Extract shared block processing logic
 
-**Nice-to-have:**
-16. M3, M5, ~~M7~~ ✅, ~~L3~~ ✅, ~~L4~~ ✅, ~~L5~~ ✅, L6, ~~L7~~ ✅
+**Nice-to-have:** 16. M3, M5, ~~M7~~ ✅, ~~L3~~ ✅, ~~L4~~ ✅, ~~L5~~ ✅, L6, ~~L7~~ ✅

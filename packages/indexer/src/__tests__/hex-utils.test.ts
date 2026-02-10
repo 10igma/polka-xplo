@@ -33,8 +33,7 @@ describe("hexToBytes", () => {
   });
 
   it("handles a full 32-byte hash", () => {
-    const hash =
-      "0x0000000000000000000000000000000000000000000000000000000000000001";
+    const hash = "0x0000000000000000000000000000000000000000000000000000000000000001";
     const result = hexToBytes(hash);
     expect(result.length).toBe(32);
     expect(result[31]).toBe(1);
@@ -71,8 +70,7 @@ describe("hexToBytes ↔ bytesToHex round-trip", () => {
   });
 
   it("round-trips a 32-byte hash", () => {
-    const original =
-      "a1b2c3d4e5f60718293a4b5c6d7e8f900102030405060708091a1b1c1d1e1f20";
+    const original = "a1b2c3d4e5f60718293a4b5c6d7e8f900102030405060708091a1b1c1d1e1f20";
     expect(bytesToHex(hexToBytes(original))).toBe(original);
   });
 });

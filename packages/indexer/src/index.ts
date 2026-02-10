@@ -42,7 +42,10 @@ async function main(): Promise<void> {
 
   // 4. Parse RPC endpoints (comma-separated list supported for load balancing)
   const rpcEnv = process.env.ARCHIVE_NODE_URL ?? chainConfig.rpc[0];
-  const rpcUrls = rpcEnv.split(",").map((u) => u.trim()).filter(Boolean);
+  const rpcUrls = rpcEnv
+    .split(",")
+    .map((u) => u.trim())
+    .filter(Boolean);
   const rpcPool = new RpcPool(rpcUrls);
 
   // 5. Start the API server early so /health is always reachable

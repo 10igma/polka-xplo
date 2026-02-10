@@ -8,7 +8,7 @@
     "build": "tsc",
     "dev": "tsc --watch",
     "start": "node dist/index.js",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit && eslint src/"
   },
   "dependencies": {
     "@polka-xplo/db": "*",

@@ -7,22 +7,14 @@
 export { truncateHash, timeAgo } from "@polka-xplo/shared";
 
 /** Format a balance from raw planck value */
-export function formatBalance(
-  raw: string | null,
-  decimals = 10,
-  symbol = "DOT"
-): string {
+export function formatBalance(raw: string | null, decimals = 10, symbol = "DOT"): string {
   if (!raw || raw === "0") return `0 ${symbol}`;
   try {
     const value = BigInt(raw);
     const divisor = BigInt(10 ** decimals);
     const whole = value / divisor;
     const remainder = value % divisor;
-    const decimal = remainder
-      .toString()
-      .padStart(decimals, "0")
-      .slice(0, 4)
-      .replace(/0+$/, "");
+    const decimal = remainder.toString().padStart(decimals, "0").slice(0, 4).replace(/0+$/, "");
     return `${whole}${decimal ? "." + decimal : ""} ${symbol}`;
   } catch {
     return `${raw} planck`;

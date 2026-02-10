@@ -31,12 +31,12 @@ docker compose -f docker-compose.yml -f docker-compose.ajuna.yml up -d
 
 This starts four containers:
 
-| Container             | Port | What it does                              |
-|-----------------------|------|-------------------------------------------|
-| `polka-xplo-db`      | 5432 | PostgreSQL database                       |
-| `polka-xplo-redis`   | 6379 | Redis queue                               |
-| `polka-xplo-indexer`  | 3001 | Connects to Ajuna RPC endpoints, indexes blocks, serves REST API |
-| `polka-xplo-web`     | 3000 | Next.js frontend                          |
+| Container            | Port | What it does                                                     |
+| -------------------- | ---- | ---------------------------------------------------------------- |
+| `polka-xplo-db`      | 5432 | PostgreSQL database                                              |
+| `polka-xplo-redis`   | 6379 | Redis queue                                                      |
+| `polka-xplo-indexer` | 3001 | Connects to Ajuna RPC endpoints, indexes blocks, serves REST API |
+| `polka-xplo-web`     | 3000 | Next.js frontend                                                 |
 
 **3. Open the explorer**
 
@@ -175,13 +175,13 @@ npm run web:dev
 
 The same steps work for any Substrate/Polkadot-ecosystem chain. Just change two values:
 
-| Chain             | `CHAIN_ID`  | `ARCHIVE_NODE_URL`                          |
-|-------------------|-------------|---------------------------------------------|
-| Polkadot          | `polkadot`  | `wss://rpc.polkadot.io,wss://polkadot-rpc.dwellir.com` |
-| Kusama            | `kusama`    | `wss://kusama-rpc.polkadot.io,wss://kusama-rpc.dwellir.com` |
-| Asset Hub         | `assethub`  | `wss://polkadot-asset-hub-rpc.polkadot.io`  |
-| Moonbeam          | `moonbeam`  | `wss://wss.api.moonbeam.network`            |
-| **Ajuna Network** | `ajuna`     | `wss://rpc-para.ajuna.network,wss://ajuna.ibp.network,wss://ajuna.dotters.network` |
+| Chain             | `CHAIN_ID` | `ARCHIVE_NODE_URL`                                                                 |
+| ----------------- | ---------- | ---------------------------------------------------------------------------------- |
+| Polkadot          | `polkadot` | `wss://rpc.polkadot.io,wss://polkadot-rpc.dwellir.com`                             |
+| Kusama            | `kusama`   | `wss://kusama-rpc.polkadot.io,wss://kusama-rpc.dwellir.com`                        |
+| Asset Hub         | `assethub` | `wss://polkadot-asset-hub-rpc.polkadot.io`                                         |
+| Moonbeam          | `moonbeam` | `wss://wss.api.moonbeam.network`                                                   |
+| **Ajuna Network** | `ajuna`    | `wss://rpc-para.ajuna.network,wss://ajuna.ibp.network,wss://ajuna.dotters.network` |
 
 For chains not in the default list, add an entry to `chain-config.json`:
 
@@ -189,10 +189,7 @@ For chains not in the default list, add an entry to `chain-config.json`:
 {
   "id": "mychain",
   "name": "My Chain",
-  "rpc": [
-    "wss://rpc.mychain.network",
-    "wss://mychain.ibp.network"
-  ],
+  "rpc": ["wss://rpc.mychain.network", "wss://mychain.ibp.network"],
   "addressPrefix": 42,
   "tokenSymbol": "MYC",
   "tokenDecimals": 12,
@@ -279,17 +276,17 @@ Polka-Xplo follows a **three-pillar architecture**:
 
 ## Tech Stack
 
-| Layer       | Technology                                           |
-|-------------|------------------------------------------------------|
-| Monorepo    | [Turborepo](https://turbo.build/) + npm workspaces   |
-| Language    | TypeScript 5.7+                                      |
-| Chain API   | [Polkadot-API (PAPI)](https://papi.how/) v1.8+       |
-| Backend     | Node.js 20+, Express                                 |
-| Frontend    | Next.js 15 (App Router), React 19                    |
-| Styling     | Tailwind CSS 3.4 (dark mode)                         |
-| Database    | PostgreSQL 16 (JSONB + GIN indexes)                  |
-| Queue       | Redis 7                                              |
-| Deployment  | Docker Compose                                       |
+| Layer      | Technology                                         |
+| ---------- | -------------------------------------------------- |
+| Monorepo   | [Turborepo](https://turbo.build/) + npm workspaces |
+| Language   | TypeScript 5.7+                                    |
+| Chain API  | [Polkadot-API (PAPI)](https://papi.how/) v1.8+     |
+| Backend    | Node.js 20+, Express                               |
+| Frontend   | Next.js 15 (App Router), React 19                  |
+| Styling    | Tailwind CSS 3.4 (dark mode)                       |
+| Database   | PostgreSQL 16 (JSONB + GIN indexes)                |
+| Queue      | Redis 7                                            |
+| Deployment | Docker Compose                                     |
 
 ---
 
@@ -467,12 +464,12 @@ docker compose up -d
 
 This starts four services:
 
-| Service            | Port  | Description                           |
-|--------------------|-------|---------------------------------------|
-| `explorer-db`      | 5432  | PostgreSQL 16 (persistent volume)     |
-| `explorer-redis`   | 6379  | Redis 7 (job queue + cache)           |
-| `explorer-indexer`  | 3001  | Block processor + REST API            |
-| `explorer-web`     | 3000  | Next.js frontend                      |
+| Service            | Port | Description                       |
+| ------------------ | ---- | --------------------------------- |
+| `explorer-db`      | 5432 | PostgreSQL 16 (persistent volume) |
+| `explorer-redis`   | 6379 | Redis 7 (job queue + cache)       |
+| `explorer-indexer` | 3001 | Block processor + REST API        |
+| `explorer-web`     | 3000 | Next.js frontend                  |
 
 To stop:
 
@@ -505,17 +502,18 @@ The database layer provides a typed query interface over PostgreSQL.
 
 **Core tables:**
 
-| Table               | Purpose                                    |
-|---------------------|--------------------------------------------|
-| `blocks`            | Chain skeleton (height, hash, status, etc.) |
-| `extrinsics`        | Decoded user transactions (JSONB args)      |
-| `events`            | Decoded events, correlated to extrinsics    |
-| `accounts`          | Identity and activity tracking              |
-| `account_balances`  | Balance snapshots (free/reserved/frozen)     |
-| `indexer_state`     | Per-chain sync progress                     |
-| `extension_migrations` | Tracks applied extension migrations      |
+| Table                  | Purpose                                     |
+| ---------------------- | ------------------------------------------- |
+| `blocks`               | Chain skeleton (height, hash, status, etc.) |
+| `extrinsics`           | Decoded user transactions (JSONB args)      |
+| `events`               | Decoded events, correlated to extrinsics    |
+| `accounts`             | Identity and activity tracking              |
+| `account_balances`     | Balance snapshots (free/reserved/frozen)    |
+| `indexer_state`        | Per-chain sync progress                     |
+| `extension_migrations` | Tracks applied extension migrations         |
 
 **Key features:**
+
 - Connection pooling with configurable limits
 - Transaction support with automatic rollback
 - JSONB columns with GIN indexes for flexible querying of extrinsic args and event data
@@ -531,9 +529,9 @@ The indexing engine connects to a Polkadot node via PAPI and processes blocks in
 - **`client.ts`** -- PAPI client factory using `WsProvider` for Archive Node connections. Supports multiple concurrent chain connections.
 - **`rpc-pool.ts`** -- Round-robin RPC pool with automatic failover, health tracking, and exponential backoff suspension. Distributes JSON-RPC calls across multiple endpoints to reduce rate limiting and survive node outages.
 - **`ingestion/pipeline.ts`** -- The dual-stream architecture:
-  - *Finalized stream*: Source of truth. Blocks marked `status: 'finalized'` are immutable.
-  - *Best-head stream*: Optimistic updates for real-time UI responsiveness.
-  - *Backfill*: On startup, detects gaps between DB and chain tip and batch-fills missing blocks.
+  - _Finalized stream_: Source of truth. Blocks marked `status: 'finalized'` are immutable.
+  - _Best-head stream_: Optimistic updates for real-time UI responsiveness.
+  - _Backfill_: On startup, detects gaps between DB and chain tip and batch-fills missing blocks.
 - **`ingestion/block-processor.ts`** -- Deep extraction per block: header parsing, extrinsic decoding (module/call/args), event correlation via `ApplyExtrinsic` phase, `ExtrinsicFailed` detection, timestamp extraction from `Timestamp.set`, signer tracking.
 - **`metrics.ts`** -- `IndexerMetrics` singleton tracking blocks/min, blocks/hr, ETA, error count, memory usage. Powers the `/api/indexer-status` endpoint and the Status dashboard.
 - **`runtime-parser.ts`** -- Parses V14 runtime metadata into pallet summaries (storage items, calls, events, constants). Powers the `/runtime` page.
@@ -603,14 +601,8 @@ extensions/
   "version": "1.0.0",
   "description": "Extension for the MyModule pallet.",
   "palletId": "MyModule",
-  "supportedEvents": [
-    "MyModule.SomethingHappened",
-    "MyModule.ValueChanged"
-  ],
-  "supportedCalls": [
-    "MyModule.do_something",
-    "MyModule.set_value"
-  ],
+  "supportedEvents": ["MyModule.SomethingHappened", "MyModule.ValueChanged"],
+  "supportedCalls": ["MyModule.do_something", "MyModule.set_value"],
   "dependencies": []
 }
 ```
@@ -625,10 +617,11 @@ export async function onEvent(ctx: BlockContext, event: ExplorerEvent): Promise<
   if (event.module === "MyModule" && event.event === "SomethingHappened") {
     const who = String(event.data.who ?? "");
     const value = String(event.data.value ?? "0");
-    await query(
-      `INSERT INTO mymod_events (block_height, who, value) VALUES ($1, $2, $3)`,
-      [ctx.blockHeight, who, value]
-    );
+    await query(`INSERT INTO mymod_events (block_height, who, value) VALUES ($1, $2, $3)`, [
+      ctx.blockHeight,
+      who,
+      value,
+    ]);
   }
 }
 
@@ -663,7 +656,7 @@ Then register the viewer in `packages/web/src/components/EventRenderer.tsx`:
 ```typescript
 const extensionComponents = {
   "MyModule.SomethingHappened": lazy(
-    () => import("../../../extensions/pallet-mymod/ui/components/MyViewer")
+    () => import("../../../extensions/pallet-mymod/ui/components/MyViewer"),
   ),
 };
 ```
@@ -715,6 +708,7 @@ Polka-Xplo supports multiple chains from a single deployment. Chain configuratio
 **Pre-configured chains:** Polkadot, Kusama, Asset Hub (parachain), Moonbeam (EVM parachain with H160 addresses), Ajuna Network (gaming parachain).
 
 **How it works:**
+
 - The indexer reads `CHAIN_ID` from the environment to select which chain to index.
 - The frontend provides chain-scoped routes at `/chain/[chainId]/...` with per-chain theming.
 - PAPI's multi-descriptor system generates type-safe APIs for each configured chain.
@@ -914,6 +908,7 @@ GET /api/search?q=<query>
 ```
 
 Smart search with heuristic input detection:
+
 - **Block number** (numeric input): searches blocks by height
 - **Hash** (0x-prefixed, 66 chars): searches blocks and extrinsics by hash
 - **Address** (SS58 or H160 format): searches/links to account page
@@ -932,55 +927,55 @@ Returns a list of all registered extension manifests.
 
 ### Pages
 
-| Route                                  | Description                                                      |
-|----------------------------------------|------------------------------------------------------------------|
-| `/`                                    | Home page with stats bar, latest blocks, and latest transfers     |
-| `/block/[id]`                          | Block detail with 3-tab view: Extrinsics, Events, Logs            |
-| `/blocks`                              | Paginated blocks list                                             |
-| `/extrinsics`                          | Paginated extrinsics list with signed-only filter toggle          |
-| `/extrinsic/[hash]`                    | Extrinsic detail: decoded args, fee, success/fail, events         |
-| `/events`                              | Paginated events list with module filter chips                    |
-| `/transfers`                           | Paginated transfers list                                          |
-| `/accounts`                            | Ranked accounts list with balances                                |
-| `/account/[address]`                   | Account dashboard: identity, balance breakdown, recent activity   |
-| `/logs`                                | Paginated digest logs with color-coded type badges                |
-| `/runtime`                             | Runtime modules: spec version selector, pallet metadata table     |
-| `/status`                              | Real-time indexer status dashboard with auto-refresh metrics      |
-| `/chain-state/[pallet]/[storage]`      | Generic chain state browser using PAPI metadata introspection     |
-| `/chain/[chainId]/[...path]`           | Multi-chain scoped view with per-chain theming                    |
+| Route                             | Description                                                     |
+| --------------------------------- | --------------------------------------------------------------- |
+| `/`                               | Home page with stats bar, latest blocks, and latest transfers   |
+| `/block/[id]`                     | Block detail with 3-tab view: Extrinsics, Events, Logs          |
+| `/blocks`                         | Paginated blocks list                                           |
+| `/extrinsics`                     | Paginated extrinsics list with signed-only filter toggle        |
+| `/extrinsic/[hash]`               | Extrinsic detail: decoded args, fee, success/fail, events       |
+| `/events`                         | Paginated events list with module filter chips                  |
+| `/transfers`                      | Paginated transfers list                                        |
+| `/accounts`                       | Ranked accounts list with balances                              |
+| `/account/[address]`              | Account dashboard: identity, balance breakdown, recent activity |
+| `/logs`                           | Paginated digest logs with color-coded type badges              |
+| `/runtime`                        | Runtime modules: spec version selector, pallet metadata table   |
+| `/status`                         | Real-time indexer status dashboard with auto-refresh metrics    |
+| `/chain-state/[pallet]/[storage]` | Generic chain state browser using PAPI metadata introspection   |
+| `/chain/[chainId]/[...path]`      | Multi-chain scoped view with per-chain theming                  |
 
 ### Components
 
-| Component              | Type     | Description                                                           |
-|------------------------|----------|-----------------------------------------------------------------------|
-| `HeaderNav`            | Client   | Navigation bar with Blockchain dropdown, chain branding, prefix selector |
-| `OmniSearch`           | Client   | Smart search bar with type detection and dropdown results             |
-| `StatsBar`             | Server   | Chain stats ribbon (finalized block, total extrinsics, accounts, etc.) |
-| `BlockList`            | Server   | Inline block table for home page                                      |
-| `BlocksTable`          | Client   | Full sortable block table for `/blocks` list page                     |
-| `BlockDetailTabs`      | Client   | 3-tab block detail view (Extrinsics, Events, Logs)                    |
-| `LatestBlocksCard`     | Server   | Home page latest blocks card with "View All" link                     |
-| `LatestTransfersCard`  | Server   | Home page latest transfers card with "View All" link                  |
-| `ExtrinsicsTable`      | Client   | Extrinsic rows with ID, block, module.call, signer (SS58), fee        |
-| `EventsTable`          | Client   | Event rows with block, index, module.event, data preview              |
-| `TransfersTable`       | Client   | Transfer rows with from/to addresses and amounts                      |
-| `AccountsTable`        | Client   | Ranked accounts with balances and extrinsic counts                    |
-| `LogsTable`            | Client   | Digest log rows with color-coded type badges (PreRuntime, Seal, etc.) |
-| `Pagination`           | Client   | Smart pagination with page numbers, ellipsis, and "go to page" input  |
-| `BalanceDisplay`       | Server   | Four-quadrant balance card (transferable, free, reserved, frozen)      |
-| `AddressDisplay`       | Client   | SS58 address display with configurable prefix                         |
-| `PrefixSelector`       | Client   | SS58 prefix dropdown selector                                         |
-| `IndexerDashboard`     | Client   | Real-time indexer metrics with auto-refresh (blocks/min, ETA, memory) |
-| `Providers`            | Client   | Client-side context providers (SS58Provider, ThemeProvider)            |
-| `EventRenderer`        | Client   | Dynamic extension viewer loader with `JsonView` fallback              |
-| `JsonView`             | Client   | Collapsible JSON display for raw event/extrinsic data                 |
+| Component             | Type   | Description                                                              |
+| --------------------- | ------ | ------------------------------------------------------------------------ |
+| `HeaderNav`           | Client | Navigation bar with Blockchain dropdown, chain branding, prefix selector |
+| `OmniSearch`          | Client | Smart search bar with type detection and dropdown results                |
+| `StatsBar`            | Server | Chain stats ribbon (finalized block, total extrinsics, accounts, etc.)   |
+| `BlockList`           | Server | Inline block table for home page                                         |
+| `BlocksTable`         | Client | Full sortable block table for `/blocks` list page                        |
+| `BlockDetailTabs`     | Client | 3-tab block detail view (Extrinsics, Events, Logs)                       |
+| `LatestBlocksCard`    | Server | Home page latest blocks card with "View All" link                        |
+| `LatestTransfersCard` | Server | Home page latest transfers card with "View All" link                     |
+| `ExtrinsicsTable`     | Client | Extrinsic rows with ID, block, module.call, signer (SS58), fee           |
+| `EventsTable`         | Client | Event rows with block, index, module.event, data preview                 |
+| `TransfersTable`      | Client | Transfer rows with from/to addresses and amounts                         |
+| `AccountsTable`       | Client | Ranked accounts with balances and extrinsic counts                       |
+| `LogsTable`           | Client | Digest log rows with color-coded type badges (PreRuntime, Seal, etc.)    |
+| `Pagination`          | Client | Smart pagination with page numbers, ellipsis, and "go to page" input     |
+| `BalanceDisplay`      | Server | Four-quadrant balance card (transferable, free, reserved, frozen)        |
+| `AddressDisplay`      | Client | SS58 address display with configurable prefix                            |
+| `PrefixSelector`      | Client | SS58 prefix dropdown selector                                            |
+| `IndexerDashboard`    | Client | Real-time indexer metrics with auto-refresh (blocks/min, ETA, memory)    |
+| `Providers`           | Client | Client-side context providers (SS58Provider, ThemeProvider)              |
+| `EventRenderer`       | Client | Dynamic extension viewer loader with `JsonView` fallback                 |
+| `JsonView`            | Client | Collapsible JSON display for raw event/extrinsic data                    |
 
 ### Hooks
 
-| Hook               | Description                                                              |
-|--------------------|--------------------------------------------------------------------------|
-| `useLiveBalance`   | Polls account balance every 6s; designed for PAPI observable upgrade     |
-| `usePapiClient`    | Manages a frontend PAPI client connection (smoldot-ready)                |
+| Hook             | Description                                                          |
+| ---------------- | -------------------------------------------------------------------- |
+| `useLiveBalance` | Polls account balance every 6s; designed for PAPI observable upgrade |
+| `usePapiClient`  | Manages a frontend PAPI client connection (smoldot-ready)            |
 
 ---
 
@@ -990,32 +985,32 @@ Returns a list of all registered extension manifests.
 
 Copy `.env.example` to `.env` and configure:
 
-| Variable                  | Default                             | Description                          |
-|---------------------------|-------------------------------------|--------------------------------------|
-| `DATABASE_URL`            | `postgresql://polkaxplo:polkaxplo@localhost:5432/polkaxplo` | PostgreSQL connection string |
-| `REDIS_URL`               | `redis://localhost:6379`            | Redis connection string              |
-| `ARCHIVE_NODE_URL`        | `wss://rpc.polkadot.io`            | Comma-separated RPC endpoint(s) for round-robin load balancing and failover |
-| `CHAIN_ID`                | `polkadot`                          | Chain to index (matches chain-config.json) |
-| `API_PORT`                | `3001`                              | Indexer API server port              |
-| `BATCH_SIZE`              | `100`                               | Blocks per backfill batch            |
-| `BACKFILL_CONCURRENCY`    | `10`                                | Parallel block processing workers during backfill |
-| `NEXT_PUBLIC_API_URL`     | `http://localhost:3001`             | API base URL for the frontend        |
-| `NEXT_PUBLIC_WS_URL`      | `ws://localhost:3001`               | WebSocket URL for live updates       |
-| `NEXT_PUBLIC_CHAIN_ID`    | `polkadot`                          | Chain ID for frontend theming and branding |
+| Variable               | Default                                                     | Description                                                                 |
+| ---------------------- | ----------------------------------------------------------- | --------------------------------------------------------------------------- |
+| `DATABASE_URL`         | `postgresql://polkaxplo:polkaxplo@localhost:5432/polkaxplo` | PostgreSQL connection string                                                |
+| `REDIS_URL`            | `redis://localhost:6379`                                    | Redis connection string                                                     |
+| `ARCHIVE_NODE_URL`     | `wss://rpc.polkadot.io`                                     | Comma-separated RPC endpoint(s) for round-robin load balancing and failover |
+| `CHAIN_ID`             | `polkadot`                                                  | Chain to index (matches chain-config.json)                                  |
+| `API_PORT`             | `3001`                                                      | Indexer API server port                                                     |
+| `BATCH_SIZE`           | `100`                                                       | Blocks per backfill batch                                                   |
+| `BACKFILL_CONCURRENCY` | `10`                                                        | Parallel block processing workers during backfill                           |
+| `NEXT_PUBLIC_API_URL`  | `http://localhost:3001`                                     | API base URL for the frontend                                               |
+| `NEXT_PUBLIC_WS_URL`   | `ws://localhost:3001`                                       | WebSocket URL for live updates                                              |
+| `NEXT_PUBLIC_CHAIN_ID` | `polkadot`                                                  | Chain ID for frontend theming and branding                                  |
 
 ### Scripts
 
-| Command              | Description                                   |
-|----------------------|-----------------------------------------------|
-| `npm run build`      | Build all packages (via Turborepo)             |
-| `npm run dev`        | Start all packages in development mode         |
-| `npm run lint`       | Type-check all packages                        |
-| `npm run db:migrate` | Run database migrations                        |
-| `npm run indexer:start` | Build and start the indexer                 |
-| `npm run web:dev`    | Start the Next.js frontend in dev mode         |
-| `npm run web:build`  | Production build of the frontend               |
-| `npm run docker:up`  | Start all Docker Compose services              |
-| `npm run docker:down`| Stop all Docker Compose services               |
+| Command                 | Description                            |
+| ----------------------- | -------------------------------------- |
+| `npm run build`         | Build all packages (via Turborepo)     |
+| `npm run dev`           | Start all packages in development mode |
+| `npm run lint`          | Type-check all packages                |
+| `npm run db:migrate`    | Run database migrations                |
+| `npm run indexer:start` | Build and start the indexer            |
+| `npm run web:dev`       | Start the Next.js frontend in dev mode |
+| `npm run web:build`     | Production build of the frontend       |
+| `npm run docker:up`     | Start all Docker Compose services      |
+| `npm run docker:down`   | Stop all Docker Compose services       |
 
 ---
 
@@ -1067,6 +1062,7 @@ Copy `.env.example` to `.env` and configure:
 - [x] Blockchain dropdown navigation consolidation
 - [x] Clickable parent hash in block detail
 - [x] Homepage "View All" links to list pages
+
 ### Phase 5: Future
 
 - [ ] PAPI descriptor generation per chain (`npx papi add`)

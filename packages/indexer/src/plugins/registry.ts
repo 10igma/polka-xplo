@@ -51,12 +51,7 @@ export class PluginRegistry {
         console.log(`[Registry] Found extension: ${manifest.name} (${manifest.id})`);
 
         // Load the extension handler module
-        const handlerPath = path.join(
-          extensionsDir,
-          entry.name,
-          "indexer",
-          "event-handlers.js"
-        );
+        const handlerPath = path.join(extensionsDir, entry.name, "indexer", "event-handlers.js");
 
         let extension: PalletExtension = { manifest };
 
@@ -64,7 +59,9 @@ export class PluginRegistry {
         try {
           await fs.access(handlerPath);
           handlerExists = true;
-        } catch {}
+        } catch {
+          /* ignore */
+        }
 
         if (handlerExists) {
           const module = await import(handlerPath);
@@ -105,7 +102,7 @@ export class PluginRegistry {
 
     console.log(
       `[Registry] Registered: ${manifest.name} — ` +
-        `${manifest.supportedEvents.length} events, ${manifest.supportedCalls.length} calls`
+        `${manifest.supportedEvents.length} events, ${manifest.supportedCalls.length} calls`,
     );
   }
 
@@ -119,7 +116,7 @@ export class PluginRegistry {
       // Check if already applied
       const result = await query(
         `SELECT 1 FROM extension_migrations WHERE extension_id = $1 AND version = $2`,
-        [ext.manifest.id, ext.manifest.version]
+        [ext.manifest.id, ext.manifest.version],
       );
 
       if (result.rows.length > 0) continue;
@@ -128,10 +125,10 @@ export class PluginRegistry {
 
       const sql = ext.getMigrationSQL();
       await query(sql);
-      await query(
-        `INSERT INTO extension_migrations (extension_id, version) VALUES ($1, $2)`,
-        [ext.manifest.id, ext.manifest.version]
-      );
+      await query(`INSERT INTO extension_migrations (extension_id, version) VALUES ($1, $2)`, [
+        ext.manifest.id,
+        ext.manifest.version,
+      ]);
 
       console.log(`[Registry] Migration complete: ${migrationKey}`);
     }
@@ -151,10 +148,7 @@ export class PluginRegistry {
   }
 
   /** Invoke matching onExtrinsic handlers */
-  async invokeExtrinsicHandlers(
-    ctx: BlockContext,
-    extrinsic: Extrinsic
-  ): Promise<void> {
+  async invokeExtrinsicHandlers(ctx: BlockContext, extrinsic: Extrinsic): Promise<void> {
     const key = `${extrinsic.module}.${extrinsic.call}`;
     const handlers = this.callIndex.get(key) ?? [];
 
@@ -170,10 +164,7 @@ export class PluginRegistry {
   }
 
   /** Invoke matching onEvent handlers */
-  async invokeEventHandlers(
-    ctx: BlockContext,
-    event: ExplorerEvent
-  ): Promise<void> {
+  async invokeEventHandlers(ctx: BlockContext, event: ExplorerEvent): Promise<void> {
     const key = `${event.module}.${event.event}`;
     const handlers = this.eventIndex.get(key) ?? [];
 

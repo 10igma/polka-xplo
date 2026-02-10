@@ -8,11 +8,7 @@ import { truncateHash } from "@/lib/format";
  */
 export function LogsTable({ logs }: { logs: DigestLogEntry[] }) {
   if (logs.length === 0) {
-    return (
-      <div className="text-center py-12 text-zinc-500">
-        No digest logs found yet.
-      </div>
-    );
+    return <div className="text-center py-12 text-zinc-500">No digest logs found yet.</div>;
   }
 
   return (
@@ -31,10 +27,7 @@ export function LogsTable({ logs }: { logs: DigestLogEntry[] }) {
           {logs.map((log, i) => (
             <tr key={`${log.blockHeight}-${log.logIndex}-${i}`} className="table-row">
               <td className="py-2.5 pr-4 font-mono text-xs text-zinc-300">
-                <a
-                  href={`/block/${log.blockHeight}`}
-                  className="text-accent hover:underline"
-                >
+                <a href={`/block/${log.blockHeight}`} className="text-accent hover:underline">
                   {log.blockHeight}-{log.logIndex}
                 </a>
               </td>
@@ -76,8 +69,6 @@ function TypeBadge({ type }: { type: string }) {
   // Capitalize first letter
   const label = type.charAt(0).toUpperCase() + type.slice(1);
   return (
-    <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${color}`}>
-      {label}
-    </span>
+    <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${color}`}>{label}</span>
   );
 }

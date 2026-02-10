@@ -24,9 +24,7 @@ export function EventsTable({ events }: { events: EventSummary[] }) {
         <tbody>
           {events.map((evt) => (
             <tr key={evt.id} className="table-row">
-              <td className="py-2.5 pr-4 font-mono text-xs text-zinc-400">
-                {evt.id}
-              </td>
+              <td className="py-2.5 pr-4 font-mono text-xs text-zinc-400">{evt.id}</td>
               <td className="py-2.5 pr-4">
                 <a
                   href={`/block/${evt.blockHeight}`}

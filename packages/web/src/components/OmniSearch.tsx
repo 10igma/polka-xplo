@@ -63,9 +63,7 @@ export function OmniSearch() {
               className="flex items-center gap-3 px-4 py-3 hover:bg-zinc-800 transition-colors first:rounded-t-lg last:rounded-b-lg"
             >
               <TypeBadge type={result.type} />
-              <span className="text-sm text-zinc-200 truncate">
-                {result.label}
-              </span>
+              <span className="text-sm text-zinc-200 truncate">{result.label}</span>
             </a>
           ))}
         </div>
@@ -82,9 +80,7 @@ function TypeBadge({ type }: { type: string }) {
   };
 
   return (
-    <span
-      className={`badge border ${colors[type] ?? "bg-zinc-800 text-zinc-400 border-zinc-700"}`}
-    >
+    <span className={`badge border ${colors[type] ?? "bg-zinc-800 text-zinc-400 border-zinc-700"}`}>
       {type}
     </span>
   );

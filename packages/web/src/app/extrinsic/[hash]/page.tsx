@@ -2,12 +2,7 @@ import { getExtrinsic } from "@/lib/api";
 import { EventList } from "@/components/EventList";
 import { JsonView } from "@/components/JsonView";
 import { AddressDisplay } from "@/components/AddressDisplay";
-import {
-  truncateHash,
-  formatBalance,
-  formatDate,
-  timeAgo,
-} from "@/lib/format";
+import { formatBalance, formatDate, timeAgo } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
@@ -21,11 +16,7 @@ function toCamelCase(s: string): string {
  * Handles both tx hash (0x...) and block-index ID (100-0) formats.
  * Layout mirrors statescan.io extrinsic detail view.
  */
-export default async function ExtrinsicPage({
-  params,
-}: {
-  params: Promise<{ hash: string }>;
-}) {
+export default async function ExtrinsicPage({ params }: { params: Promise<{ hash: string }> }) {
   const { hash } = await params;
   let data;
 
@@ -39,14 +30,12 @@ export default async function ExtrinsicPage({
     );
   }
 
-  const { extrinsic, events, blockTimestamp, blockHash } = data;
+  const { extrinsic, events, blockTimestamp } = data;
 
   return (
     <div className="space-y-6">
       {/* Header */}
-      <h1 className="text-xl font-bold text-zinc-100">
-        Extrinsic {extrinsic.id}
-      </h1>
+      <h1 className="text-xl font-bold text-zinc-100">Extrinsic {extrinsic.id}</h1>
 
       {/* Detail Card */}
       <div className="card space-y-3">
@@ -61,42 +50,19 @@ export default async function ExtrinsicPage({
           value={String(extrinsic.blockHeight)}
           link={`/block/${extrinsic.blockHeight}`}
         />
-        <DetailRow
-          label="Extrinsic Hash"
-          value={extrinsic.txHash ?? "—"}
-          mono
-        />
-        <DetailRow
-          label="Module"
-          value={toCamelCase(extrinsic.module)}
-        />
-        <DetailRow
-          label="Call"
-          value={extrinsic.call}
-        />
+        <DetailRow label="Extrinsic Hash" value={extrinsic.txHash ?? "—"} mono />
+        <DetailRow label="Module" value={toCamelCase(extrinsic.module)} />
+        <DetailRow label="Call" value={extrinsic.call} />
         <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-4">
           <span className="text-xs text-zinc-500 sm:w-32 shrink-0">Signer</span>
           {extrinsic.signer ? (
-            <AddressDisplay
-              address={extrinsic.signer}
-              link
-              className="text-sm font-mono"
-            />
+            <AddressDisplay address={extrinsic.signer} link className="text-sm font-mono" />
           ) : (
             <span className="text-sm text-zinc-200">Unsigned</span>
           )}
         </div>
-        {extrinsic.fee && (
-          <DetailRow
-            label="Fee"
-            value={formatBalance(extrinsic.fee)}
-          />
-        )}
-        <DetailRow
-          label="Result"
-          value=""
-          badge={extrinsic.success ? "success" : "error"}
-        />
+        {extrinsic.fee && <DetailRow label="Fee" value={formatBalance(extrinsic.fee)} />}
+        <DetailRow label="Result" value="" badge={extrinsic.success ? "success" : "error"} />
       </div>
 
       {/* Parameters */}
@@ -146,7 +112,13 @@ function DetailRow({
           {badge === "success" ? (
             <>
               <svg width="12" height="12" viewBox="0 0 12 12" fill="none" className="mr-1">
-                <path d="M2.5 6L5 8.5L9.5 3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                <path
+                  d="M2.5 6L5 8.5L9.5 3.5"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
               </svg>
               Success
             </>
@@ -162,9 +134,7 @@ function DetailRow({
           {value}
         </a>
       ) : (
-        <span
-          className={`text-sm text-zinc-200 break-all ${mono ? "font-mono" : ""}`}
-        >
+        <span className={`text-sm text-zinc-200 break-all ${mono ? "font-mono" : ""}`}>
           {value}
         </span>
       )}

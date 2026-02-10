@@ -3,8 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import type { IndexerStatusResponse } from "@/lib/api";
 
-const API_BASE =
-  process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
 
 function formatBytes(bytes: number): string {
   if (bytes === 0) return "0 B";
@@ -66,9 +65,7 @@ export function IndexerDashboard() {
   }
 
   if (!status) {
-    return (
-      <div className="text-center py-12 text-zinc-500">Loading indexer status...</div>
-    );
+    return <div className="text-center py-12 text-zinc-500">Loading indexer status...</div>;
   }
 
   const stateColor =
@@ -91,9 +88,7 @@ export function IndexerDashboard() {
       <section className="card space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="text-base font-semibold text-zinc-100">Sync Progress</h2>
-          <span
-            className={`px-2.5 py-1 rounded text-xs font-medium ${stateBg} ${stateColor}`}
-          >
+          <span className={`px-2.5 py-1 rounded text-xs font-medium ${stateBg} ${stateColor}`}>
             {status.state.toUpperCase()}
           </span>
         </div>
@@ -115,7 +110,11 @@ export function IndexerDashboard() {
             <p className="text-xs text-zinc-500 mt-1.5">
               {formatNumber(status.blocksRemaining)} blocks remaining
               {status.etaSeconds != null && (
-                <> &middot; ETA: <span className="text-zinc-300">{formatDuration(status.etaSeconds)}</span></>
+                <>
+                  {" "}
+                  &middot; ETA:{" "}
+                  <span className="text-zinc-300">{formatDuration(status.etaSeconds)}</span>
+                </>
               )}
             </p>
           )}
@@ -126,7 +125,11 @@ export function IndexerDashboard() {
           <StatCard label="Blocks / min" value={formatNumber(status.blocksPerMinute)} />
           <StatCard label="Blocks / hour" value={formatNumber(status.blocksPerHour)} />
           <StatCard label="Total processed" value={formatNumber(status.blocksProcessed)} />
-          <StatCard label="Errors" value={formatNumber(status.errorCount)} alert={status.errorCount > 0} />
+          <StatCard
+            label="Errors"
+            value={formatNumber(status.errorCount)}
+            alert={status.errorCount > 0}
+          />
         </div>
       </section>
 
@@ -188,15 +191,11 @@ export function IndexerDashboard() {
             <tbody>
               {status.rpc.endpoints.map((ep) => (
                 <tr key={ep.url} className="border-b border-zinc-800/50">
-                  <td className="py-2 pr-4 font-mono text-xs text-zinc-300 break-all">
-                    {ep.url}
-                  </td>
+                  <td className="py-2 pr-4 font-mono text-xs text-zinc-300 break-all">{ep.url}</td>
                   <td className="py-2 pr-4">
                     <span
                       className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${
-                        ep.healthy
-                          ? "bg-green-900/40 text-green-400"
-                          : "bg-red-900/40 text-red-400"
+                        ep.healthy ? "bg-green-900/40 text-green-400" : "bg-red-900/40 text-red-400"
                       }`}
                     >
                       {ep.healthy ? "Healthy" : "Down"}
@@ -205,9 +204,7 @@ export function IndexerDashboard() {
                   <td className="py-2 pr-4 text-right text-zinc-400">
                     {formatNumber(ep.successes)}
                   </td>
-                  <td className="py-2 text-right text-zinc-400">
-                    {formatNumber(ep.failures)}
-                  </td>
+                  <td className="py-2 text-right text-zinc-400">{formatNumber(ep.failures)}</td>
                 </tr>
               ))}
             </tbody>
@@ -224,25 +221,11 @@ export function IndexerDashboard() {
   );
 }
 
-function StatCard({
-  label,
-  value,
-  alert,
-}: {
-  label: string;
-  value: string;
-  alert?: boolean;
-}) {
+function StatCard({ label, value, alert }: { label: string; value: string; alert?: boolean }) {
   return (
     <div className="bg-zinc-900/60 rounded-lg p-3">
       <p className="text-xs text-zinc-500 mb-1">{label}</p>
-      <p
-        className={`text-lg font-semibold ${
-          alert ? "text-red-400" : "text-zinc-100"
-        }`}
-      >
-        {value}
-      </p>
+      <p className={`text-lg font-semibold ${alert ? "text-red-400" : "text-zinc-100"}`}>{value}</p>
     </div>
   );
 }

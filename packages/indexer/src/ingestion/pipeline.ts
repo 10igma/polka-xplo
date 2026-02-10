@@ -2,13 +2,9 @@ import { createRequire } from "node:module";
 import type { PapiClient } from "../client.js";
 import type { PluginRegistry } from "../plugins/registry.js";
 import { RpcPool } from "../rpc-pool.js";
-import { processBlock, type RawBlockData, type RawExtrinsic, type RawEvent } from "./block-processor.js";
+import { processBlock, type RawBlockData } from "./block-processor.js";
 import { ExtrinsicDecoder } from "./extrinsic-decoder.js";
-import {
-  getLastFinalizedHeight,
-  upsertIndexerState,
-  finalizeBlock,
-} from "@polka-xplo/db";
+import { getLastFinalizedHeight, upsertIndexerState, finalizeBlock } from "@polka-xplo/db";
 import type { BlockStatus, DigestLog } from "@polka-xplo/shared";
 import { metrics } from "../metrics.js";
 import { hexToBytes, bytesToHex } from "../hex-utils.js";
@@ -96,17 +92,24 @@ export class IngestionPipeline {
     metrics.seedIndexedHeight(dbHeight);
 
     if (chainTip <= dbHeight) {
-      console.log(`[Pipeline:${this.chainId}] No backfill needed. DB at ${dbHeight}, chain at ${chainTip}`);
+      console.log(
+        `[Pipeline:${this.chainId}] No backfill needed. DB at ${dbHeight}, chain at ${chainTip}`,
+      );
       return;
     }
 
     const gap = chainTip - dbHeight;
-    console.log(`[Pipeline:${this.chainId}] Backfilling ${gap} blocks (${dbHeight + 1} -> ${chainTip})`);
+    console.log(
+      `[Pipeline:${this.chainId}] Backfilling ${gap} blocks (${dbHeight + 1} -> ${chainTip})`,
+    );
 
     await upsertIndexerState(this.chainId, dbHeight, dbHeight, "syncing");
 
     const BATCH_SIZE = parseInt(process.env.BATCH_SIZE ?? "100", 10);
-    const CONCURRENCY = Math.min(parseInt(process.env.BACKFILL_CONCURRENCY ?? "10", 10), BATCH_SIZE);
+    const CONCURRENCY = Math.min(
+      parseInt(process.env.BACKFILL_CONCURRENCY ?? "10", 10),
+      BATCH_SIZE,
+    );
 
     for (let start = dbHeight + 1; start <= chainTip; start += BATCH_SIZE) {
       if (!this.running) break;
@@ -121,7 +124,7 @@ export class IngestionPipeline {
       await this.runWithConcurrency(
         heights,
         (height) => this.fetchAndProcessByHash(null, height, "finalized"),
-        CONCURRENCY
+        CONCURRENCY,
       );
 
       await upsertIndexerState(this.chainId, end, end, "syncing");
@@ -159,7 +162,9 @@ export class IngestionPipeline {
         console.error(`[Pipeline:${this.chainId}] Finalized stream error:`, err);
         if (this.running) {
           const delay = Math.min(1000 * 2 ** retryCount, 60_000);
-          console.log(`[Pipeline:${this.chainId}] Reconnecting finalized stream in ${delay}ms (attempt ${retryCount + 1})...`);
+          console.log(
+            `[Pipeline:${this.chainId}] Reconnecting finalized stream in ${delay}ms (attempt ${retryCount + 1})...`,
+          );
           setTimeout(() => {
             if (this.running) this.subscribeFinalized(retryCount + 1);
           }, delay);
@@ -193,7 +198,9 @@ export class IngestionPipeline {
         console.error(`[Pipeline:${this.chainId}] Best stream error:`, err);
         if (this.running) {
           const delay = Math.min(1000 * 2 ** retryCount, 60_000);
-          console.log(`[Pipeline:${this.chainId}] Reconnecting best stream in ${delay}ms (attempt ${retryCount + 1})...`);
+          console.log(
+            `[Pipeline:${this.chainId}] Reconnecting best stream in ${delay}ms (attempt ${retryCount + 1})...`,
+          );
           setTimeout(() => {
             if (this.running) this.subscribeBestHead(retryCount + 1);
           }, delay);
@@ -211,7 +218,7 @@ export class IngestionPipeline {
   private async fetchAndProcessByHash(
     blockHash: string | null,
     height: number,
-    status: BlockStatus
+    status: BlockStatus,
   ): Promise<void> {
     const rawBlock = await this.fetchBlock(blockHash, height);
     if (!rawBlock) {
@@ -231,10 +238,7 @@ export class IngestionPipeline {
    * window (recent finalized + best head forks). Historical blocks during
    * backfill must be fetched via the legacy `chain_getBlock` JSON-RPC method.
    */
-  private async fetchBlock(
-    blockHash: string | null,
-    height: number
-  ): Promise<RawBlockData | null> {
+  private async fetchBlock(blockHash: string | null, height: number): Promise<RawBlockData | null> {
     // If we have a hash from a live subscription, try PAPI first
     if (blockHash) {
       try {
@@ -249,10 +253,7 @@ export class IngestionPipeline {
   }
 
   /** Fetch a block via PAPI client (for live/recent blocks in chainHead follow window) */
-  private async fetchBlockViaPapi(
-    blockHash: string,
-    height: number
-  ): Promise<RawBlockData | null> {
+  private async fetchBlockViaPapi(blockHash: string, height: number): Promise<RawBlockData | null> {
     try {
       const { client } = this.papiClient;
 
@@ -265,29 +266,23 @@ export class IngestionPipeline {
       const { lookup, specVersion } = await this.decoder.ensureMetadata(blockHash);
       let timestamp: number | null = null;
 
-      const extrinsics: RawBlockData["extrinsics"] = body.map(
-        (encodedExt, i) => {
-          const decoded = this.decoder.decodeCallInfo(encodedExt, lookup);
-          const ts = this.decoder.extractTimestamp(
-            encodedExt,
-            decoded.module,
-            decoded.call
-          );
-          if (ts !== null) timestamp = ts;
+      const extrinsics: RawBlockData["extrinsics"] = body.map((encodedExt, i) => {
+        const decoded = this.decoder.decodeCallInfo(encodedExt, lookup);
+        const ts = this.decoder.extractTimestamp(encodedExt, decoded.module, decoded.call);
+        if (ts !== null) timestamp = ts;
 
-          return {
-            index: i,
-            hash: decoded.signer ? computeTxHash(decoded.rawHex) : null,
-            signer: decoded.signer,
-            module: decoded.module,
-            call: decoded.call,
-            args: decoded.args,
-            success: true, // will be corrected by enrichExtrinsicsFromEvents
-            fee: null,     // will be filled by enrichExtrinsicsFromEvents
-            tip: decoded.tip,
-          };
-        }
-      );
+        return {
+          index: i,
+          hash: decoded.signer ? computeTxHash(decoded.rawHex) : null,
+          signer: decoded.signer,
+          module: decoded.module,
+          call: decoded.call,
+          args: decoded.args,
+          success: true, // will be corrected by enrichExtrinsicsFromEvents
+          fee: null, // will be filled by enrichExtrinsicsFromEvents
+          tip: decoded.tip,
+        };
+      });
 
       // Decode events from System.Events storage
       const decodedEvents = await this.decoder.decodeEvents(blockHash, lookup);
@@ -303,20 +298,14 @@ export class IngestionPipeline {
       // Correlate success/fee from events back into extrinsics
       enrichExtrinsicsFromEvents(extrinsics, events);
 
-      const hasRuntimeUpgrade = header.digests.some(
-        (d) => d.type === "runtimeUpdated"
-      );
+      const hasRuntimeUpgrade = header.digests.some((d) => d.type === "runtimeUpdated");
       if (hasRuntimeUpgrade) {
-        console.log(
-          `[Pipeline:${this.chainId}] Runtime upgrade detected at block #${height}`
-        );
+        console.log(`[Pipeline:${this.chainId}] Runtime upgrade detected at block #${height}`);
       }
 
       // Parse PAPI digest items into our DigestLog format
       const digestLogs: DigestLog[] = header.digests.map((d) => {
-        const type = d.type === "runtimeUpdated"
-          ? "runtimeEnvironmentUpdated"
-          : d.type;
+        const type = d.type === "runtimeUpdated" ? "runtimeEnvironmentUpdated" : d.type;
         const value = d.value as { engine?: string; payload?: string } | undefined;
         return {
           type,
@@ -349,9 +338,7 @@ export class IngestionPipeline {
    * Works for any historical block on archive/full nodes that support
    * the legacy (pre-v2) JSON-RPC API.
    */
-  private async fetchBlockViaLegacyRpc(
-    height: number
-  ): Promise<RawBlockData | null> {
+  private async fetchBlockViaLegacyRpc(height: number): Promise<RawBlockData | null> {
     try {
       // 1. Resolve block hash via pool
       const hash = await this.rpcPool.call<string>("chain_getBlockHash", [height]);
@@ -383,29 +370,23 @@ export class IngestionPipeline {
       const { lookup, specVersion } = await this.decoder.ensureMetadata(hash);
       let timestamp: number | null = null;
 
-      const extrinsics: RawBlockData["extrinsics"] = rawExts.map(
-        (encodedExt, i) => {
-          const decoded = this.decoder.decodeCallInfo(encodedExt, lookup);
-          const ts = this.decoder.extractTimestamp(
-            encodedExt,
-            decoded.module,
-            decoded.call
-          );
-          if (ts !== null) timestamp = ts;
+      const extrinsics: RawBlockData["extrinsics"] = rawExts.map((encodedExt, i) => {
+        const decoded = this.decoder.decodeCallInfo(encodedExt, lookup);
+        const ts = this.decoder.extractTimestamp(encodedExt, decoded.module, decoded.call);
+        if (ts !== null) timestamp = ts;
 
-          return {
-            index: i,
-            hash: decoded.signer ? computeTxHash(decoded.rawHex) : null,
-            signer: decoded.signer,
-            module: decoded.module,
-            call: decoded.call,
-            args: decoded.args,
-            success: true, // will be corrected by enrichExtrinsicsFromEvents
-            fee: null,     // will be filled by enrichExtrinsicsFromEvents
-            tip: decoded.tip,
-          };
-        }
-      );
+        return {
+          index: i,
+          hash: decoded.signer ? computeTxHash(decoded.rawHex) : null,
+          signer: decoded.signer,
+          module: decoded.module,
+          call: decoded.call,
+          args: decoded.args,
+          success: true, // will be corrected by enrichExtrinsicsFromEvents
+          fee: null, // will be filled by enrichExtrinsicsFromEvents
+          tip: decoded.tip,
+        };
+      });
 
       // Decode events from System.Events storage
       const decodedEvents = await this.decoder.decodeEvents(hash, lookup);
@@ -422,8 +403,8 @@ export class IngestionPipeline {
       enrichExtrinsicsFromEvents(extrinsics, events);
 
       // Parse legacy RPC digest logs
-      const digestLogs: DigestLog[] = (header.digest?.logs ?? []).map(
-        (hexLog: string) => parseDigestLogHex(hexLog)
+      const digestLogs: DigestLog[] = (header.digest?.logs ?? []).map((hexLog: string) =>
+        parseDigestLogHex(hexLog),
       );
 
       return {
@@ -449,7 +430,7 @@ export class IngestionPipeline {
   private async runWithConcurrency<T>(
     items: T[],
     fn: (item: T) => Promise<void>,
-    concurrency: number
+    concurrency: number,
   ): Promise<void> {
     const queue = [...items];
     const workers = Array.from({ length: Math.min(concurrency, queue.length) }, async () => {

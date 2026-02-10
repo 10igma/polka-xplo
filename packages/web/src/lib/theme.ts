@@ -55,10 +55,7 @@ const FALLBACK_THEME: ThemeConfig = {
  * Looks up the matching chain in DEFAULT_CHAINS; falls back to a generic theme.
  */
 export function getTheme(): ThemeConfig {
-  const chainId =
-    process.env.NEXT_PUBLIC_CHAIN_ID ??
-    process.env.CHAIN_ID ??
-    "";
+  const chainId = process.env.NEXT_PUBLIC_CHAIN_ID ?? process.env.CHAIN_ID ?? "";
 
   if (!chainId) return FALLBACK_THEME;
 

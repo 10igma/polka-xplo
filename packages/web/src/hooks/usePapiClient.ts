@@ -60,7 +60,10 @@ export function usePapiClient(rpcUrl?: string) {
     connect();
 
     return () => {
-      if (clientRef.current && typeof (clientRef.current as { destroy?: () => void }).destroy === "function") {
+      if (
+        clientRef.current &&
+        typeof (clientRef.current as { destroy?: () => void }).destroy === "function"
+      ) {
         (clientRef.current as { destroy: () => void }).destroy();
       }
     };

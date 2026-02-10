@@ -57,7 +57,7 @@ export interface RawEvent {
 export async function processBlock(
   raw: RawBlockData,
   status: BlockStatus,
-  registry: PluginRegistry
+  registry: PluginRegistry,
 ): Promise<void> {
   const blockCtx: BlockContext = {
     blockHeight: raw.number,
@@ -125,9 +125,7 @@ export async function processBlock(
     for (const rawEvt of raw.events) {
       const evtId = `${raw.number}-${rawEvt.index}`;
       const extrinsicId =
-        rawEvt.extrinsicIndex !== null
-          ? extrinsicMap.get(rawEvt.extrinsicIndex) ?? null
-          : null;
+        rawEvt.extrinsicIndex !== null ? (extrinsicMap.get(rawEvt.extrinsicIndex) ?? null) : null;
 
       const event: ExplorerEvent = {
         id: evtId,

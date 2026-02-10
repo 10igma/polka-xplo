@@ -115,7 +115,7 @@ export function Pagination({ currentPage, totalPages, basePath, extraParams }: P
             >
               {item.toLocaleString()}
             </a>
-          )
+          ),
         )}
 
         {/* Next */}

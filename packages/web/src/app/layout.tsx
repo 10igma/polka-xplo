@@ -11,11 +11,7 @@ export const metadata: Metadata = {
   description: `Block explorer for ${theme.name} — powered by PAPI`,
 };
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html
       lang="en"
@@ -25,9 +21,7 @@ export default function RootLayout({
       <body className="min-h-screen flex flex-col">
         <Providers theme={theme}>
           <Header />
-          <main className="flex-1 max-w-7xl w-full mx-auto px-4 py-6">
-            {children}
-          </main>
+          <main className="flex-1 max-w-7xl w-full mx-auto px-4 py-6">{children}</main>
           <Footer />
         </Providers>
       </body>
@@ -50,9 +44,7 @@ function Header() {
               className="rounded-full"
             />
           )}
-          <span className="text-lg font-bold text-accent">
-            {theme.name}
-          </span>
+          <span className="text-lg font-bold text-accent">{theme.name}</span>
         </a>
 
         <SearchBar />
