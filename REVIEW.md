@@ -26,7 +26,6 @@ This review identifies **23 findings** (12 fixed ✅, 11 remaining) with the fol
 
 **File:** `packages/indexer/src/ingestion/pipeline.ts` → `runWithConcurrency()`  
 **Status:** Fixed — replaced shared mutable index with work-stealing queue (`queue.shift()`).
-```
 
 ---
 
@@ -216,18 +215,18 @@ The indexer stores accounts using the hex public key returned by PAPI (e.g., `0x
 
 ## 🟢 Low Priority
 
-### L1. No Test Suite
+### ~~L1. No Test Suite~~ ✅ FIXED
 
 **Files:** Root `package.json`, all packages  
-**Impact:** No automated regression detection
+**Status:** Fixed — Added Vitest test suite with 84 tests across 5 test files:
+- `packages/indexer/src/__tests__/hex-utils.test.ts` — `hexToBytes`, `bytesToHex` round-trip tests
+- `packages/indexer/src/__tests__/event-utils.test.ts` — `enrichExtrinsicsFromEvents`, `extractAccountsFromEvent` tests
+- `packages/shared/src/__tests__/ss58.test.ts` — SS58 encode/decode/validate utilities
+- `packages/shared/src/__tests__/config-utils.test.ts` — `truncateHash`, `timeAgo` utilities
+- `packages/web/src/lib/__tests__/format.test.ts` — `formatBalance`, `formatNumber`, `formatDate` tests
 
-There are no test files, no test runner (Jest, Vitest, etc.), and no test scripts in any package. This is acceptable for rapid prototyping but risky for a production explorer handling financial data.
-
-**Recommended:** Add Vitest (fastest for TypeScript ESM) with at least:
-- Unit tests for `queries.ts` (SQL mapping correctness)
-- Unit tests for `block-processor.ts` (event correlation, fee enrichment)
-- Integration tests for key API endpoints
-- Unit tests for `hexToBytes`, `ss58` utilities
+Also extracted `hexToBytes`/`bytesToHex` to a shared `hex-utils.ts` module (deduplicating 3 copies) and
+`enrichExtrinsicsFromEvents`/`extractAccountsFromEvent` to `event-utils.ts` for clean testability.
 
 ---
 

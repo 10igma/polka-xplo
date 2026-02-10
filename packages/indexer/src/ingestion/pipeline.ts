@@ -11,6 +11,8 @@ import {
 } from "@polka-xplo/db";
 import type { BlockStatus, DigestLog } from "@polka-xplo/shared";
 import { metrics } from "../metrics.js";
+import { hexToBytes, bytesToHex } from "../hex-utils.js";
+import { enrichExtrinsicsFromEvents } from "../event-utils.js";
 
 // Blake2-256 hash for computing extrinsic tx_hash
 const require2 = createRequire(import.meta.url);
@@ -18,61 +20,11 @@ const { Blake2256 } = require2("@polkadot-api/substrate-bindings") as {
   Blake2256: (input: Uint8Array) => Uint8Array;
 };
 
-function hexToBytes(hex: string): Uint8Array {
-  const clean = hex.startsWith("0x") ? hex.slice(2) : hex;
-  if (!clean) return new Uint8Array(0);
-  return new Uint8Array(clean.match(/.{1,2}/g)!.map((b) => parseInt(b, 16)));
-}
-
-function bytesToHex(bytes: Uint8Array): string {
-  return Array.from(bytes).map((b) => b.toString(16).padStart(2, "0")).join("");
-}
-
 /** Compute Blake2-256 hash of a raw extrinsic hex, returning 0x-prefixed hash */
 function computeTxHash(rawHex: string): string {
   const bytes = hexToBytes(rawHex);
   return "0x" + bytesToHex(Blake2256(bytes));
 }
-
-/**
- * Post-process extrinsics with decoded events to fill in success/fee.
- * Correlates System.ExtrinsicSuccess / ExtrinsicFailed events and
- * TransactionPayment.TransactionFeePaid events.
- *
- * Fee derivation priority:
- * 1. TransactionPayment.TransactionFeePaid → actual_fee  (most chains)
- * 2. Balances.Withdraw on a signed extrinsic → amount     (Ajuna / older runtimes)
- */
-function enrichExtrinsicsFromEvents(
-  extrinsics: RawExtrinsic[],
-  events: RawEvent[]
-): void {
-  for (const evt of events) {
-    if (evt.extrinsicIndex == null) continue;
-    const ext = extrinsics[evt.extrinsicIndex];
-    if (!ext) continue;
-
-    if (evt.module === "System" && evt.event === "ExtrinsicFailed") {
-      ext.success = false;
-    }
-    // Prefer TransactionFeePaid (explicit fee event)
-    if (evt.module === "TransactionPayment" && evt.event === "TransactionFeePaid") {
-      const fee = evt.data?.actual_fee ?? evt.data?.actualFee;
-      if (fee != null) ext.fee = String(fee);
-    }
-    // Fallback: Balances.Withdraw on a signed extrinsic is the fee deduction
-    if (
-      evt.module === "Balances" &&
-      evt.event === "Withdraw" &&
-      ext.signer &&
-      ext.fee == null
-    ) {
-      const amount = evt.data?.amount;
-      if (amount != null) ext.fee = String(amount);
-    }
-  }
-}
-
 /**
  * The Ingestion Pipeline manages the dual-stream architecture:
  * 1. The Canonical (Finalized) Stream — source of truth

@@ -12,6 +12,7 @@
  */
 
 import { createRequire } from "node:module";
+import { hexToBytes, bytesToHex } from "../hex-utils.js";
 
 // Import PAPI transitive dependencies using createRequire since ESM
 // module resolution with "bundler" moduleResolution may not resolve
@@ -25,20 +26,6 @@ const { getLookupFn } = require("@polkadot-api/metadata-builders") as {
 };
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
-
-function hexToBytes(hex: string): Uint8Array {
-  const clean = hex.startsWith("0x") ? hex.slice(2) : hex;
-  if (!clean) return new Uint8Array(0);
-  return new Uint8Array(
-    clean.match(/.{1,2}/g)!.map((b) => parseInt(b, 16))
-  );
-}
-
-function bytesToHex(bytes: Uint8Array): string {
-  return Array.from(bytes)
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
-}
 
 interface CompactResult {
   value: number;

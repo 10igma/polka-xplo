@@ -7,17 +7,12 @@
 
 import { createRequire } from "node:module";
 import type { RpcPool } from "./rpc-pool.js";
+import { hexToBytes } from "./hex-utils.js";
 
 const require2 = createRequire(import.meta.url);
 const { decAnyMetadata } = require2("@polkadot-api/substrate-bindings") as {
   decAnyMetadata: (bytes: Uint8Array) => { metadata: { tag: string; value: any } };
 };
-
-function hexToBytes(hex: string): Uint8Array {
-  const clean = hex.startsWith("0x") ? hex.slice(2) : hex;
-  if (!clean) return new Uint8Array(0);
-  return new Uint8Array(clean.match(/.{1,2}/g)!.map((b) => parseInt(b, 16)));
-}
 
 export interface PalletSummary {
   name: string;
