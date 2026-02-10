@@ -33,12 +33,16 @@ export function ExtrinsicList({
                 {ext.id}
               </td>
               <td className="py-2.5 pr-4">
-                <a
-                  href={`/extrinsic/${ext.txHash}`}
-                  className="text-polkadot-pink hover:underline font-mono text-xs"
-                >
-                  {truncateHash(ext.txHash)}
-                </a>
+                {ext.txHash ? (
+                  <a
+                    href={`/extrinsic/${ext.txHash}`}
+                    className="text-polkadot-pink hover:underline font-mono text-xs"
+                  >
+                    {truncateHash(ext.txHash)}
+                  </a>
+                ) : (
+                  <span className="text-zinc-500 text-xs">—</span>
+                )}
               </td>
               <td className="py-2.5 pr-4">
                 <span className="badge-info">{ext.module}</span>

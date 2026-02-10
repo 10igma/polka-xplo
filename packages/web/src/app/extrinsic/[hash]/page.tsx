@@ -41,7 +41,7 @@ export default async function ExtrinsicPage({
 
       {/* Extrinsic Info */}
       <div className="card space-y-3">
-        <DetailRow label="Hash" value={extrinsic.txHash} mono />
+        <DetailRow label="Hash" value={extrinsic.txHash ?? "—"} mono />
         <DetailRow label="Block" value={String(extrinsic.blockHeight)} link={`/block/${extrinsic.blockHeight}`} />
         <DetailRow label="Index" value={String(extrinsic.index)} />
         <DetailRow label="Module" value={extrinsic.module} />

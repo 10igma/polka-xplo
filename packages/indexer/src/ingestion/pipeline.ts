@@ -178,42 +178,47 @@ export class IngestionPipeline {
   }
 
   /**
-   * Fetch and extract a block using PAPI's PolkadotClient.
+   * Fetch and extract a block using PAPI's PolkadotClient for live blocks,
+   * or falling back to legacy JSON-RPC for historical blocks.
    *
-   * PAPI's raw client returns:
-   * - getBlockHeader(hash): { parentHash, number, stateRoot, extrinsicRoot, digests }
-   * - getBlockBody(hash):   HexString[] (SCALE-encoded extrinsics)
-   *
-   * Full decoding of extrinsics and events requires a TypedApi with
-   * chain-specific descriptors (generated via `npx papi add`). Without
-   * descriptors, we store extrinsic count and raw hex data. Once descriptors
-   * are added, the fetchBlock method can decode module/call/args fully.
+   * PAPI's chainHead_v1 subscription only covers blocks in the current follow
+   * window (recent finalized + best head forks). Historical blocks during
+   * backfill must be fetched via the legacy `chain_getBlock` JSON-RPC method.
    */
   private async fetchBlock(
     blockHash: string | null,
     height: number
   ): Promise<RawBlockData | null> {
+    // If we have a hash from a live subscription, try PAPI first
+    if (blockHash) {
+      try {
+        return await this.fetchBlockViaPapi(blockHash, height);
+      } catch {
+        // Fall through to legacy RPC
+      }
+    }
+
+    // For backfill or if PAPI fails, use legacy JSON-RPC
+    return this.fetchBlockViaLegacyRpc(height);
+  }
+
+  /** Fetch a block via PAPI client (for live/recent blocks in chainHead follow window) */
+  private async fetchBlockViaPapi(
+    blockHash: string,
+    height: number
+  ): Promise<RawBlockData | null> {
     try {
       const { client } = this.papiClient;
 
-      // Resolve hash: from subscription data, or look up
-      let hash = blockHash;
-      if (!hash) {
-        hash = await this.resolveBlockHash(height);
-        if (!hash) return null;
-      }
-
       const [header, body] = await Promise.all([
-        client.getBlockHeader(hash),
-        client.getBlockBody(hash),
+        client.getBlockHeader(blockHash),
+        client.getBlockBody(blockHash),
       ]);
 
-      // Body is HexString[] — each element is a SCALE-encoded extrinsic.
-      // Without chain descriptors we store them with minimal metadata.
       const extrinsics: RawBlockData["extrinsics"] = body.map(
         (encodedExt, i) => ({
           index: i,
-          hash: `${hash}-${i}`,
+          hash: null, // No real tx hash without SCALE decoding
           signer: null,
           module: "Unknown",
           call: "unknown",
@@ -224,7 +229,6 @@ export class IngestionPipeline {
         })
       );
 
-      // Check digests for runtime upgrade flag
       const hasRuntimeUpgrade = header.digests.some(
         (d) => d.type === "runtimeUpdated"
       );
@@ -236,53 +240,101 @@ export class IngestionPipeline {
 
       return {
         number: header.number,
-        hash,
+        hash: blockHash,
         parentHash: header.parentHash,
         stateRoot: header.stateRoot,
         extrinsicsRoot: header.extrinsicRoot,
         extrinsics,
-        events: [], // Requires TypedApi with descriptors for decoding
-        timestamp: null, // Requires decoding the Timestamp.set inherent
+        events: [],
+        timestamp: null,
         validatorId: null,
         specVersion: 0,
       };
     } catch (err) {
-      console.error(`[Pipeline:${this.chainId}] Failed to fetch block #${height}:`, err);
+      console.error(`[Pipeline:${this.chainId}] PAPI fetchBlock failed for #${height}:`, err);
       return null;
     }
   }
 
   /**
-   * Resolve a block hash from a block number.
-   * Checks finalized and best blocks known to the PAPI client,
-   * then falls back to the legacy `chain_getBlockHash` RPC method
-   * for historical blocks during backfill.
+   * Fetch a block via legacy `chain_getBlock` JSON-RPC.
+   * Works for any historical block on archive/full nodes that support
+   * the legacy (pre-v2) JSON-RPC API.
    */
-  private async resolveBlockHash(height: number): Promise<string | null> {
+  private async fetchBlockViaLegacyRpc(
+    height: number
+  ): Promise<RawBlockData | null> {
     try {
-      const { client } = this.papiClient;
-
-      const finalized = await client.getFinalizedBlock();
-      if (finalized.number === height) return finalized.hash;
-
-      // Search the best blocks array for the requested height
-      const bestBlocks = await client.getBestBlocks();
-      const match = bestBlocks.find((b) => b.number === height);
-      if (match) return match.hash;
-
-      // Fall back to legacy JSON-RPC for historical block hash resolution.
-      // This uses the `chain_getBlockHash` method which is available on
-      // both full and archive nodes.
       const rpcUrl = this.papiClient.chainConfig.rpc[0];
-      const hash = await this.rpcGetBlockHash(rpcUrl, height);
-      if (hash) return hash;
+      const httpUrl = rpcUrl.replace(/^wss:\/\//, "https://").replace(/^ws:\/\//, "http://");
 
-      console.warn(
-        `[Pipeline:${this.chainId}] Cannot resolve hash for block #${height} via any method.`
+      // 1. Resolve block hash
+      const hash = await this.rpcGetBlockHash(rpcUrl, height);
+      if (!hash) return null;
+
+      // 2. Fetch the full block via chain_getBlock
+      const res = await fetch(httpUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: 1,
+          method: "chain_getBlock",
+          params: [hash],
+        }),
+      });
+      const json = (await res.json()) as {
+        result?: {
+          block: {
+            header: {
+              parentHash: string;
+              number: string;
+              stateRoot: string;
+              extrinsicsRoot: string;
+              digest: { logs: string[] };
+            };
+            extrinsics: string[];
+          };
+        };
+        error?: { code: number; message: string };
+      };
+
+      if (!json.result?.block) {
+        console.warn(`[Pipeline:${this.chainId}] chain_getBlock returned no data for #${height}`);
+        return null;
+      }
+
+      const { header, extrinsics: rawExts } = json.result.block;
+      const blockNumber = parseInt(header.number, 16);
+
+      const extrinsics: RawBlockData["extrinsics"] = rawExts.map(
+        (encodedExt, i) => ({
+          index: i,
+          hash: null, // No real tx hash without SCALE decoding
+          signer: null,
+          module: "Unknown",
+          call: "unknown",
+          args: { raw: encodedExt },
+          success: true,
+          fee: null,
+          tip: null,
+        })
       );
-      return null;
+
+      return {
+        number: blockNumber,
+        hash,
+        parentHash: header.parentHash,
+        stateRoot: header.stateRoot,
+        extrinsicsRoot: header.extrinsicsRoot,
+        extrinsics,
+        events: [],
+        timestamp: null,
+        validatorId: null,
+        specVersion: 0,
+      };
     } catch (err) {
-      console.error(`[Pipeline:${this.chainId}] resolveBlockHash(${height}) failed:`, err);
+      console.error(`[Pipeline:${this.chainId}] Legacy RPC failed for block #${height}:`, err);
       return null;
     }
   }

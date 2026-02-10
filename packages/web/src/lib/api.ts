@@ -67,7 +67,7 @@ export async function getBlock(id: string): Promise<BlockDetail> {
 export interface ExtrinsicSummary {
   id: string;
   blockHeight: number;
-  txHash: string;
+  txHash: string | null;
   index: number;
   signer: string | null;
   module: string;

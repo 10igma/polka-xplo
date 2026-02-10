@@ -1,4 +1,7 @@
 import express from "express";
+import { fileURLToPath } from "node:url";
+import swaggerJsdoc from "swagger-jsdoc";
+import swaggerUi from "swagger-ui-express";
 import type { PluginRegistry } from "../plugins/registry.js";
 import {
   getLatestBlocks,
@@ -27,6 +30,24 @@ export function createApiServer(
 
   app.use(express.json());
 
+  // ---- Swagger / OpenAPI ----
+  const swaggerSpec = swaggerJsdoc({
+    definition: {
+      openapi: "3.0.0",
+      info: {
+        title: "Polka-Xplo Indexer API",
+        version: "0.1.0",
+        description:
+          "REST API for querying indexed Polkadot/Substrate blockchain data — blocks, extrinsics, events, accounts, and search.",
+        license: { name: "AGPL-3.0", url: "https://www.gnu.org/licenses/agpl-3.0.html" },
+      },
+      servers: [{ url: "/", description: "Current host" }],
+    },
+    apis: [fileURLToPath(import.meta.url)], // scan this file for JSDoc comments
+  });
+  app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec, { customCss: ".swagger-ui .topbar { display: none }" }));
+  app.get("/api-docs.json", (_req, res) => res.json(swaggerSpec));
+
   // CORS — configurable via CORS_ORIGIN env var (defaults to * for local dev)
   const allowedOrigin = process.env.CORS_ORIGIN ?? "*";
   app.use((_req, res, next) => {
@@ -35,7 +56,40 @@ export function createApiServer(
     next();
   });
 
-  // ---- Health Check ----
+  /**
+   * @openapi
+   * /health:
+   *   get:
+   *     tags: [Health]
+   *     summary: Indexer health check
+   *     description: Returns the operational status of the indexer, including sync progress and connectivity.
+   *     responses:
+   *       200:
+   *         description: Indexer status
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 status:
+   *                   type: string
+   *                   enum: [healthy, degraded, unhealthy]
+   *                 nodeConnected:
+   *                   type: boolean
+   *                 syncLag:
+   *                   type: integer
+   *                   description: Blocks behind the chain tip
+   *                 dbConnected:
+   *                   type: boolean
+   *                 chainTip:
+   *                   type: integer
+   *                 indexedTip:
+   *                   type: integer
+   *                 timestamp:
+   *                   type: integer
+   *       503:
+   *         description: Indexer unhealthy
+   */
   app.get("/health", async (_req, res) => {
     try {
       const state = await getIndexerState(chainId);
@@ -59,7 +113,52 @@ export function createApiServer(
     }
   });
 
-  // ---- Blocks ----
+  /**
+   * @openapi
+   * /api/blocks:
+   *   get:
+   *     tags: [Blocks]
+   *     summary: List recent blocks
+   *     description: Returns a paginated list of blocks, newest first.
+   *     parameters:
+   *       - in: query
+   *         name: limit
+   *         schema:
+   *           type: integer
+   *           default: 20
+   *           minimum: 1
+   *           maximum: 100
+   *         description: Number of blocks to return (max 100)
+   *       - in: query
+   *         name: offset
+   *         schema:
+   *           type: integer
+   *           default: 0
+   *           minimum: 0
+   *         description: Pagination offset
+   *     responses:
+   *       200:
+   *         description: Paginated block list
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 data:
+   *                   type: array
+   *                   items:
+   *                     $ref: '#/components/schemas/BlockSummary'
+   *                 total:
+   *                   type: integer
+   *                 page:
+   *                   type: integer
+   *                 pageSize:
+   *                   type: integer
+   *                 hasMore:
+   *                   type: boolean
+   *       400:
+   *         description: Invalid parameters
+   */
   app.get("/api/blocks", async (req, res) => {
     try {
       const limit = Math.min(parseInt(String(req.query.limit ?? "20"), 10), 100);
@@ -81,6 +180,43 @@ export function createApiServer(
     }
   });
 
+  /**
+   * @openapi
+   * /api/blocks/{id}:
+   *   get:
+   *     tags: [Blocks]
+   *     summary: Get block details
+   *     description: Returns block header, extrinsics, and events by block height or hash.
+   *     parameters:
+   *       - in: path
+   *         name: id
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: Block height (number) or 0x-prefixed block hash
+   *     responses:
+   *       200:
+   *         description: Block detail with extrinsics and events
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 block:
+   *                   $ref: '#/components/schemas/BlockSummary'
+   *                 extrinsics:
+   *                   type: array
+   *                   items:
+   *                     $ref: '#/components/schemas/Extrinsic'
+   *                 events:
+   *                   type: array
+   *                   items:
+   *                     $ref: '#/components/schemas/Event'
+   *       400:
+   *         description: Invalid block identifier
+   *       404:
+   *         description: Block not found
+   */
   app.get("/api/blocks/:id", async (req, res) => {
     try {
       const { id } = req.params;
@@ -109,7 +245,39 @@ export function createApiServer(
     }
   });
 
-  // ---- Extrinsics ----
+  /**
+   * @openapi
+   * /api/extrinsics/{hash}:
+   *   get:
+   *     tags: [Extrinsics]
+   *     summary: Get extrinsic by hash
+   *     description: Returns extrinsic details and all correlated events.
+   *     parameters:
+   *       - in: path
+   *         name: hash
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: Extrinsic transaction hash
+   *     responses:
+   *       200:
+   *         description: Extrinsic with correlated events
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 extrinsic:
+   *                   $ref: '#/components/schemas/Extrinsic'
+   *                 events:
+   *                   type: array
+   *                   items:
+   *                     $ref: '#/components/schemas/Event'
+   *       400:
+   *         description: Invalid hash
+   *       404:
+   *         description: Extrinsic not found
+   */
   app.get("/api/extrinsics/:hash", async (req, res) => {
     try {
       const { hash } = req.params;
@@ -130,7 +298,41 @@ export function createApiServer(
     }
   });
 
-  // ---- Accounts ----
+  /**
+   * @openapi
+   * /api/accounts/{address}:
+   *   get:
+   *     tags: [Accounts]
+   *     summary: Get account details
+   *     description: Returns account identity, balance breakdown, and recent extrinsics.
+   *     parameters:
+   *       - in: path
+   *         name: address
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: SS58 or H160 (EVM) address
+   *     responses:
+   *       200:
+   *         description: Account with balance and recent activity
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 account:
+   *                   $ref: '#/components/schemas/Account'
+   *                 balance:
+   *                   $ref: '#/components/schemas/AccountBalance'
+   *                 recentExtrinsics:
+   *                   type: array
+   *                   items:
+   *                     $ref: '#/components/schemas/Extrinsic'
+   *       400:
+   *         description: Invalid address
+   *       404:
+   *         description: Account not found
+   */
   app.get("/api/accounts/:address", async (req, res) => {
     try {
       const { address } = req.params;
@@ -166,7 +368,47 @@ export function createApiServer(
     }
   });
 
-  // ---- Search ----
+  /**
+   * @openapi
+   * /api/search:
+   *   get:
+   *     tags: [Search]
+   *     summary: Smart search
+   *     description: |
+   *       Searches by heuristic input detection:
+   *       - **Block number** (numeric) → searches blocks by height
+   *       - **Hash** (0x-prefixed, 66 chars) → searches blocks and extrinsics
+   *       - **Address** (SS58/H160) → links to account page
+   *     parameters:
+   *       - in: query
+   *         name: q
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: Search query (block number, hash, or address)
+   *     responses:
+   *       200:
+   *         description: Search results
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 results:
+   *                   type: array
+   *                   items:
+   *                     type: object
+   *                     properties:
+   *                       type:
+   *                         type: string
+   *                         enum: [block, extrinsic, account]
+   *                       id:
+   *                         type: string
+   *                       label:
+   *                         type: string
+   *                       url:
+   *                         type: string
+   */
   app.get("/api/search", async (req, res) => {
     try {
       const input = String(req.query.q ?? "").trim();
@@ -245,10 +487,162 @@ export function createApiServer(
     }
   });
 
-  // ---- Extensions ----
+  /**
+   * @openapi
+   * /api/extensions:
+   *   get:
+   *     tags: [Extensions]
+   *     summary: List registered extensions
+   *     description: Returns all registered pallet extension manifests.
+   *     responses:
+   *       200:
+   *         description: Extension manifest list
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 extensions:
+   *                   type: array
+   *                   items:
+   *                     type: object
+   *                     properties:
+   *                       id:
+   *                         type: string
+   *                       name:
+   *                         type: string
+   *                       version:
+   *                         type: string
+   *                       palletId:
+   *                         type: string
+   *                       supportedEvents:
+   *                         type: array
+   *                         items:
+   *                           type: string
+   *                       supportedCalls:
+   *                         type: array
+   *                         items:
+   *                           type: string
+   */
   app.get("/api/extensions", (_req, res) => {
     res.json({ extensions: registry.getExtensions() });
   });
+
+  /**
+   * @openapi
+   * components:
+   *   schemas:
+   *     BlockSummary:
+   *       type: object
+   *       properties:
+   *         height:
+   *           type: integer
+   *           description: Block number
+   *         hash:
+   *           type: string
+   *           description: 0x-prefixed block hash
+   *         parentHash:
+   *           type: string
+   *         stateRoot:
+   *           type: string
+   *         extrinsicsRoot:
+   *           type: string
+   *         timestamp:
+   *           type: integer
+   *           nullable: true
+   *           description: Unix timestamp (ms)
+   *         validatorId:
+   *           type: string
+   *           nullable: true
+   *         status:
+   *           type: string
+   *           enum: [best, finalized]
+   *         specVersion:
+   *           type: integer
+   *         eventCount:
+   *           type: integer
+   *         extrinsicCount:
+   *           type: integer
+   *     Extrinsic:
+   *       type: object
+   *       properties:
+   *         id:
+   *           type: string
+   *           description: "blockHeight-index"
+   *         blockHeight:
+   *           type: integer
+   *         txHash:
+   *           type: string
+   *           nullable: true
+   *         index:
+   *           type: integer
+   *         signer:
+   *           type: string
+   *           nullable: true
+   *         module:
+   *           type: string
+   *         call:
+   *           type: string
+   *         args:
+   *           type: object
+   *           description: Decoded call arguments (JSONB)
+   *         success:
+   *           type: boolean
+   *         fee:
+   *           type: string
+   *           nullable: true
+   *         tip:
+   *           type: string
+   *           nullable: true
+   *     Event:
+   *       type: object
+   *       properties:
+   *         id:
+   *           type: string
+   *         blockHeight:
+   *           type: integer
+   *         extrinsicId:
+   *           type: string
+   *           nullable: true
+   *         index:
+   *           type: integer
+   *         module:
+   *           type: string
+   *         event:
+   *           type: string
+   *         data:
+   *           type: object
+   *           description: Decoded event data (JSONB)
+   *     Account:
+   *       type: object
+   *       properties:
+   *         address:
+   *           type: string
+   *         publicKey:
+   *           type: string
+   *           nullable: true
+   *         identity:
+   *           type: object
+   *           nullable: true
+   *         lastActiveBlock:
+   *           type: integer
+   *         createdAtBlock:
+   *           type: integer
+   *     AccountBalance:
+   *       type: object
+   *       properties:
+   *         free:
+   *           type: string
+   *         reserved:
+   *           type: string
+   *         frozen:
+   *           type: string
+   *         flags:
+   *           type: string
+   *           nullable: true
+   *         updatedAtBlock:
+   *           type: integer
+   */
 
   return app;
 }

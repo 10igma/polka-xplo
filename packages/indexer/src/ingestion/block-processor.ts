@@ -29,7 +29,7 @@ export interface RawBlockData {
 
 export interface RawExtrinsic {
   index: number;
-  hash: string;
+  hash: string | null;
   signer: string | null;
   module: string;
   call: string;

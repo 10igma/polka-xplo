@@ -24,7 +24,7 @@ export interface Block {
 export interface Extrinsic {
   id: string;
   blockHeight: number;
-  txHash: string;
+  txHash: string | null;
   index: number;
   signer: string | null;
   module: string;

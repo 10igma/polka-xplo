@@ -48,6 +48,14 @@ function Header() {
           >
             Chain State
           </a>
+          <a
+            href={`${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001"}/api-docs`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="hover:text-zinc-100 transition-colors"
+          >
+            API
+          </a>
         </nav>
       </div>
     </header>
