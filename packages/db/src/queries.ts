@@ -158,6 +158,24 @@ export async function getExtrinsicsByBlock(
   return result.rows.map(mapExtrinsic);
 }
 
+export async function getExtrinsicsList(
+  limit = 25,
+  offset = 0
+): Promise<{ data: Extrinsic[]; total: number }> {
+  const [dataRes, countRes] = await Promise.all([
+    query<Record<string, unknown>>(
+      `SELECT id, block_height, tx_hash, index, signer, module, call, args, success, fee, tip
+       FROM extrinsics ORDER BY block_height DESC, index DESC LIMIT $1 OFFSET $2`,
+      [limit, offset]
+    ),
+    query<{ count: string }>(`SELECT COUNT(*) AS count FROM extrinsics`),
+  ]);
+  return {
+    data: dataRes.rows.map(mapExtrinsic),
+    total: parseInt(countRes.rows[0].count, 10),
+  };
+}
+
 export async function getExtrinsicByHash(
   txHash: string
 ): Promise<Extrinsic | null> {
@@ -241,6 +259,67 @@ export async function getEventsByExtrinsic(
     [extrinsicId]
   );
   return result.rows.map(mapEvent);
+}
+
+export async function getEventsList(
+  limit = 25,
+  offset = 0,
+  module?: string
+): Promise<{ data: ExplorerEvent[]; total: number }> {
+  const whereData = module ? `WHERE module = $3` : ``;
+  const whereCount = module ? `WHERE module = $1` : ``;
+  const params: unknown[] = module ? [limit, offset, module] : [limit, offset];
+  const [dataRes, countRes] = await Promise.all([
+    query<Record<string, unknown>>(
+      `SELECT id, block_height, extrinsic_id, index, module, event, data, phase_type, phase_index
+       FROM events ${whereData} ORDER BY block_height DESC, index DESC LIMIT $1 OFFSET $2`,
+      params
+    ),
+    query<{ count: string }>(
+      `SELECT COUNT(*) AS count FROM events ${whereCount}`,
+      module ? [module] : []
+    ),
+  ]);
+  return {
+    data: dataRes.rows.map(mapEvent),
+    total: parseInt(countRes.rows[0].count, 10),
+  };
+}
+
+export async function getTransfersList(
+  limit = 25,
+  offset = 0
+): Promise<{
+  data: { extrinsicId: string; blockHeight: number; timestamp: number | null; amount: string; from: string; to: string }[];
+  total: number;
+}> {
+  const [dataRes, countRes] = await Promise.all([
+    query<Record<string, unknown>>(
+      `SELECT e.id as event_id, e.extrinsic_id, e.block_height, e.data,
+              b.timestamp
+       FROM events e
+       LEFT JOIN blocks b ON b.height = e.block_height
+       WHERE e.module = 'Balances' AND e.event IN ('Transfer', 'transfer')
+       ORDER BY e.block_height DESC, e.index DESC
+       LIMIT $1 OFFSET $2`,
+      [limit, offset]
+    ),
+    query<{ count: string }>(
+      `SELECT COUNT(*) AS count FROM events WHERE module = 'Balances' AND event IN ('Transfer', 'transfer')`
+    ),
+  ]);
+  const data = dataRes.rows.map((row) => {
+    const d = typeof row.data === "string" ? JSON.parse(row.data) : (row.data as Record<string, unknown>);
+    return {
+      extrinsicId: (row.extrinsic_id as string) ?? (row.event_id as string),
+      blockHeight: Number(row.block_height),
+      timestamp: row.timestamp ? Number(row.timestamp) : null,
+      amount: String(d.amount ?? d.value ?? "0"),
+      from: String(d.from ?? d.who ?? ""),
+      to: String(d.to ?? d.dest ?? ""),
+    };
+  });
+  return { data, total: parseInt(countRes.rows[0].count, 10) };
 }
 
 // ============================================================

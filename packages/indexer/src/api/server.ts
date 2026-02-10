@@ -11,14 +11,17 @@ import {
   getExtrinsicByHash,
   getExtrinsicById,
   getExtrinsicsBySigner,
+  getExtrinsicsList,
   getEventsByBlock,
   getEventsByExtrinsic,
+  getEventsList,
   getAccount,
   getAccounts,
   getIndexerState,
   searchByHash,
   getChainStats,
   getLatestTransfers,
+  getTransfersList,
 } from "@polka-xplo/db";
 import { detectSearchType, normalizeAddress } from "@polka-xplo/shared";
 
@@ -246,6 +249,46 @@ export function createApiServer(
       res.json({ block, extrinsics, events });
     } catch (err) {
       res.status(500).json({ error: "Failed to fetch block" });
+    }
+  });
+
+  /**
+   * @openapi
+   * /api/extrinsics:
+   *   get:
+   *     tags: [Extrinsics]
+   *     summary: List extrinsics
+   *     description: Returns a paginated list of extrinsics, most recent first.
+   *     parameters:
+   *       - in: query
+   *         name: limit
+   *         schema:
+   *           type: integer
+   *           default: 25
+   *       - in: query
+   *         name: offset
+   *         schema:
+   *           type: integer
+   *           default: 0
+   *     responses:
+   *       200:
+   *         description: Paginated extrinsic list
+   */
+  app.get("/api/extrinsics", async (req, res) => {
+    try {
+      const limit = Math.min(Math.max(parseInt(req.query.limit as string) || 25, 1), 100);
+      const offset = Math.max(parseInt(req.query.offset as string) || 0, 0);
+      const result = await getExtrinsicsList(limit, offset);
+      const page = Math.floor(offset / limit) + 1;
+      res.json({
+        data: result.data,
+        total: result.total,
+        page,
+        pageSize: limit,
+        hasMore: offset + limit < result.total,
+      });
+    } catch (err) {
+      res.status(500).json({ error: "Failed to fetch extrinsics" });
     }
   });
 
@@ -544,11 +587,71 @@ export function createApiServer(
    */
   app.get("/api/transfers", async (req, res) => {
     try {
-      const limit = Math.min(parseInt(String(req.query.limit ?? "10"), 10), 50);
-      const transfers = await getLatestTransfers(isNaN(limit) ? 10 : limit);
-      res.json(transfers);
+      const limit = Math.min(Math.max(parseInt(req.query.limit as string) || 25, 1), 100);
+      const offset = Math.max(parseInt(req.query.offset as string) || 0, 0);
+      // If offset=0 and limit<=50, use old fast path for homepage card; otherwise paginated
+      if (offset === 0 && limit <= 50 && !req.query.offset) {
+        const transfers = await getLatestTransfers(limit);
+        res.json(transfers);
+      } else {
+        const result = await getTransfersList(limit, offset);
+        const page = Math.floor(offset / limit) + 1;
+        res.json({
+          data: result.data,
+          total: result.total,
+          page,
+          pageSize: limit,
+          hasMore: offset + limit < result.total,
+        });
+      }
     } catch (err) {
       res.status(500).json({ error: "Failed to fetch transfers" });
+    }
+  });
+
+  /**
+   * @openapi
+   * /api/events:
+   *   get:
+   *     tags: [Events]
+   *     summary: List events
+   *     description: Returns a paginated list of events, most recent first. Optionally filter by module.
+   *     parameters:
+   *       - in: query
+   *         name: limit
+   *         schema:
+   *           type: integer
+   *           default: 25
+   *       - in: query
+   *         name: offset
+   *         schema:
+   *           type: integer
+   *           default: 0
+   *       - in: query
+   *         name: module
+   *         schema:
+   *           type: string
+   *         description: Filter by pallet module name (e.g. Balances, System)
+   *     responses:
+   *       200:
+   *         description: Paginated event list
+   */
+  app.get("/api/events", async (req, res) => {
+    try {
+      const limit = Math.min(Math.max(parseInt(req.query.limit as string) || 25, 1), 100);
+      const offset = Math.max(parseInt(req.query.offset as string) || 0, 0);
+      const module = req.query.module as string | undefined;
+      const result = await getEventsList(limit, offset, module || undefined);
+      const page = Math.floor(offset / limit) + 1;
+      res.json({
+        data: result.data,
+        total: result.total,
+        page,
+        pageSize: limit,
+        hasMore: offset + limit < result.total,
+      });
+    } catch (err) {
+      res.status(500).json({ error: "Failed to fetch events" });
     }
   });
 

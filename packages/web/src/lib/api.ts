@@ -89,6 +89,23 @@ export async function getExtrinsic(id: string): Promise<ExtrinsicDetail> {
   return fetchJson(`/api/extrinsics/${encodeURIComponent(id)}`);
 }
 
+// ---- Extrinsics List ----
+
+export interface ExtrinsicsResponse {
+  data: ExtrinsicSummary[];
+  total: number;
+  page: number;
+  pageSize: number;
+  hasMore: boolean;
+}
+
+export async function getExtrinsics(
+  limit = 25,
+  offset = 0
+): Promise<ExtrinsicsResponse> {
+  return fetchJson(`/api/extrinsics?limit=${limit}&offset=${offset}`);
+}
+
 // ---- Events ----
 
 export interface EventSummary {
@@ -99,6 +116,25 @@ export interface EventSummary {
   module: string;
   event: string;
   data: Record<string, unknown>;
+}
+
+// ---- Events List ----
+
+export interface EventsResponse {
+  data: EventSummary[];
+  total: number;
+  page: number;
+  pageSize: number;
+  hasMore: boolean;
+}
+
+export async function getEvents(
+  limit = 25,
+  offset = 0,
+  module?: string
+): Promise<EventsResponse> {
+  const params = `limit=${limit}&offset=${offset}${module ? `&module=${encodeURIComponent(module)}` : ""}`;
+  return fetchJson(`/api/events?${params}`);
 }
 
 // ---- Accounts ----
@@ -214,4 +250,19 @@ export interface TransferSummary {
 
 export async function getTransfers(limit = 10): Promise<TransferSummary[]> {
   return fetchJson(`/api/transfers?limit=${limit}`);
+}
+
+export interface TransfersResponse {
+  data: TransferSummary[];
+  total: number;
+  page: number;
+  pageSize: number;
+  hasMore: boolean;
+}
+
+export async function getTransfersList(
+  limit = 25,
+  offset = 0
+): Promise<TransfersResponse> {
+  return fetchJson(`/api/transfers?limit=${limit}&offset=${offset}`);
 }
