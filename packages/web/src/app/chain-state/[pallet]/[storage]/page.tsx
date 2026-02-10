@@ -34,7 +34,7 @@ export default async function ChainStatePage({
         <div className="text-sm text-zinc-300 space-y-3">
           <p>
             This view dynamically queries the{" "}
-            <code className="text-polkadot-pink bg-zinc-800 px-1 rounded">
+            <code className="text-accent bg-zinc-800 px-1 rounded">
               {pallet}.{storage}
             </code>{" "}
             storage map using PAPI&apos;s metadata introspection.

@@ -9,6 +9,8 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
+        /* Dynamic accent colour driven by CSS variable (set in layout.tsx) */
+        accent: "var(--color-accent)",
         polkadot: {
           pink: "#E6007A",
           purple: "#6D3AEE",

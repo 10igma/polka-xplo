@@ -44,7 +44,7 @@ export function LatestBlocksCard({ blocks }: { blocks: BlockSummary[] }) {
             <div className="flex items-center gap-2">
               <a
                 href={`/block/${block.height}`}
-                className="text-polkadot-pink hover:underline font-mono text-sm font-medium"
+                className="text-accent hover:underline font-mono text-sm font-medium"
               >
                 {formatNumber(block.height)}
               </a>

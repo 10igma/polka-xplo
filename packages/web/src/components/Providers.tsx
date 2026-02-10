@@ -2,11 +2,25 @@
 
 import React from "react";
 import { SS58Provider } from "@/lib/ss58-context";
+import { ThemeProvider } from "@/lib/theme-context";
+import type { ThemeConfig } from "@/lib/theme";
 
 /**
  * Client-side providers wrapper.
- * Wraps app in SS58 prefix context for address formatting.
+ * Wraps app in theme + SS58 prefix contexts.
  */
-export function Providers({ children }: { children: React.ReactNode }) {
-  return <SS58Provider defaultPrefix={42}>{children}</SS58Provider>;
+export function Providers({
+  theme,
+  children,
+}: {
+  theme: ThemeConfig;
+  children: React.ReactNode;
+}) {
+  return (
+    <ThemeProvider theme={theme}>
+      <SS58Provider defaultPrefix={theme.addressPrefix}>
+        {children}
+      </SS58Provider>
+    </ThemeProvider>
+  );
 }

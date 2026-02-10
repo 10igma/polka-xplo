@@ -50,7 +50,7 @@ export function LatestTransfersCard({
             <div className="flex items-center gap-2">
               <a
                 href={`/extrinsic/${tx.extrinsicId}`}
-                className="text-polkadot-pink hover:underline font-mono text-sm font-medium"
+                className="text-accent hover:underline font-mono text-sm font-medium"
               >
                 {tx.extrinsicId}
               </a>

@@ -2,6 +2,7 @@ import { getAccount } from "@/lib/api";
 import { ExtrinsicList } from "@/components/ExtrinsicList";
 import { AddressDisplay } from "@/components/AddressDisplay";
 import { formatNumber, formatBalance } from "@/lib/format";
+import { theme } from "@/lib/theme";
 
 /**
  * Account Detail Page — Server Component
@@ -36,16 +37,16 @@ export default async function AccountPage({
   const transferable = free > frozen ? free - frozen : BigInt(0);
   const total = free + reserved;
 
-  // Token config (TODO: make dynamic from chain config)
-  const decimals = 12;
-  const symbol = "AJUN";
+  // Token config from theme
+  const decimals = theme.tokenDecimals;
+  const symbol = theme.tokenSymbol;
 
   return (
     <div className="space-y-6">
       {/* Address header */}
       <div className="flex items-center gap-3">
         {/* Identicon placeholder */}
-        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-polkadot-pink to-polkadot-purple flex items-center justify-center text-white text-sm font-bold shrink-0">
+        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-accent to-polkadot-purple flex items-center justify-center text-white text-sm font-bold shrink-0">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
             <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" />
             <circle cx="12" cy="7" r="4" />

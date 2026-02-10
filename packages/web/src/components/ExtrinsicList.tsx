@@ -37,7 +37,7 @@ export function ExtrinsicList({
               <td className="py-2.5 pr-4 font-mono text-xs">
                 <a
                   href={`/extrinsic/${ext.id}`}
-                  className="text-polkadot-pink hover:underline"
+                  className="text-accent hover:underline"
                 >
                   {ext.id}
                 </a>
@@ -46,7 +46,7 @@ export function ExtrinsicList({
                 {ext.txHash ? (
                   <a
                     href={`/extrinsic/${ext.txHash}`}
-                    className="text-polkadot-pink hover:underline font-mono text-xs"
+                    className="text-accent hover:underline font-mono text-xs"
                   >
                     {truncateHash(ext.txHash)}
                   </a>

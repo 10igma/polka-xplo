@@ -10,6 +10,7 @@ import { OmniSearch } from "@/components/OmniSearch";
 import { StatsBar } from "@/components/StatsBar";
 import { LatestBlocksCard } from "@/components/LatestBlocksCard";
 import { LatestTransfersCard } from "@/components/LatestTransfersCard";
+import { theme } from "@/lib/theme";
 
 /**
  * Home page: statescan-style dashboard with stats bar,
@@ -39,7 +40,7 @@ export default async function HomePage() {
       {/* Hero search */}
       <section className="py-6 text-center space-y-4">
         <h1 className="text-2xl font-bold text-zinc-100">
-          Polka-Xplo Explorer
+          {theme.name} Explorer
         </h1>
         <p className="text-sm text-zinc-400">
           Search blocks, extrinsics, accounts, and transfers
@@ -67,7 +68,7 @@ export default async function HomePage() {
             </h2>
             <a
               href="/block/latest"
-              className="text-xs text-polkadot-pink hover:underline"
+              className="text-xs text-accent hover:underline"
             >
               View All
             </a>
@@ -85,7 +86,11 @@ export default async function HomePage() {
             </h2>
           </div>
           <div className="card">
-            <LatestTransfersCard transfers={transfers} />
+            <LatestTransfersCard
+              transfers={transfers}
+              tokenDecimals={theme.tokenDecimals}
+              tokenSymbol={theme.tokenSymbol}
+            />
           </div>
         </section>
       </div>

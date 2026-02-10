@@ -23,6 +23,10 @@ COPY chain-config.json ./
 # Build shared first (web depends on it)
 RUN npx tsc -p packages/shared/tsconfig.json
 
+# Accept chain ID as a build argument so NEXT_PUBLIC_ env is inlined at build time
+ARG NEXT_PUBLIC_CHAIN_ID=polkadot
+ENV NEXT_PUBLIC_CHAIN_ID=$NEXT_PUBLIC_CHAIN_ID
+
 # Build the Next.js frontend
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN cd packages/web && npx next build

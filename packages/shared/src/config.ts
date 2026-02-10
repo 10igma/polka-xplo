@@ -10,6 +10,7 @@ export const DEFAULT_CHAINS: ChainConfig[] = [
     tokenSymbol: "DOT",
     tokenDecimals: 10,
     colorTheme: "#E6007A",
+    logo: "/logos/polkadot.svg",
   },
   {
     id: "kusama",
@@ -19,6 +20,7 @@ export const DEFAULT_CHAINS: ChainConfig[] = [
     tokenSymbol: "KSM",
     tokenDecimals: 12,
     colorTheme: "#000000",
+    logo: "/logos/kusama.svg",
   },
   {
     id: "assethub",
@@ -28,6 +30,7 @@ export const DEFAULT_CHAINS: ChainConfig[] = [
     tokenSymbol: "DOT",
     tokenDecimals: 10,
     colorTheme: "#48CC81",
+    logo: "/logos/assethub.svg",
     isParachain: true,
     relayChain: "polkadot",
   },
@@ -39,6 +42,7 @@ export const DEFAULT_CHAINS: ChainConfig[] = [
     tokenSymbol: "AJUN",
     tokenDecimals: 12,
     colorTheme: "#F0388B",
+    logo: "/logos/ajuna.svg",
     isParachain: true,
     relayChain: "polkadot",
   },

@@ -37,7 +37,7 @@ export function SearchBar() {
         name="q"
         type="text"
         placeholder="Search by block, transaction hash, or address..."
-        className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-sm text-zinc-100 placeholder-zinc-500 outline-none focus:border-polkadot-pink/50 focus:ring-1 focus:ring-polkadot-pink/30 transition-colors"
+        className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-sm text-zinc-100 placeholder-zinc-500 outline-none focus:border-accent/50 focus:ring-1 focus:ring-accent/30 transition-colors"
       />
     </form>
   );

@@ -27,7 +27,7 @@ export function BlockList({ blocks }: { blocks: BlockSummary[] }) {
               <td className="py-2.5 pr-4">
                 <a
                   href={`/block/${block.height}`}
-                  className="text-polkadot-pink hover:underline font-mono"
+                  className="text-accent hover:underline font-mono"
                 >
                   #{formatNumber(block.height)}
                 </a>

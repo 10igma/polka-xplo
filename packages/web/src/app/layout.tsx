@@ -1,13 +1,14 @@
 import type { Metadata } from "next";
+import Image from "next/image";
 import { SearchBar } from "../components/SearchBar";
 import { Providers } from "../components/Providers";
 import { HeaderNav } from "../components/HeaderNav";
+import { theme } from "../lib/theme";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Polka-Xplo | Polkadot Explorer",
-  description:
-    "A modular, metadata-driven blockchain explorer for the Polkadot ecosystem",
+  title: `${theme.name} Explorer`,
+  description: `Block explorer for ${theme.name} — powered by PAPI`,
 };
 
 export default function RootLayout({
@@ -16,9 +17,13 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className="dark">
+    <html
+      lang="en"
+      className="dark"
+      style={{ "--color-accent": theme.accentColor } as React.CSSProperties}
+    >
       <body className="min-h-screen flex flex-col">
-        <Providers>
+        <Providers theme={theme}>
           <Header />
           <main className="flex-1 max-w-7xl w-full mx-auto px-4 py-6">
             {children}
@@ -36,8 +41,17 @@ function Header() {
     <header className="sticky top-0 z-50 border-b border-zinc-800 bg-zinc-950/80 backdrop-blur-sm">
       <div className="max-w-7xl mx-auto px-4 h-14 flex items-center justify-between gap-4">
         <a href="/" className="flex items-center gap-2 shrink-0">
-          <span className="text-lg font-bold text-polkadot-pink">
-            Polka-Xplo
+          {theme.logo && (
+            <Image
+              src={theme.logo}
+              alt={theme.name}
+              width={28}
+              height={28}
+              className="rounded-full"
+            />
+          )}
+          <span className="text-lg font-bold text-accent">
+            {theme.name}
           </span>
         </a>
 
@@ -52,7 +66,7 @@ function Header() {
 function Footer() {
   return (
     <footer className="border-t border-zinc-800 py-4 text-center text-xs text-zinc-500">
-      Polka-Xplo &mdash; Modular Polkadot Explorer &mdash; Powered by PAPI
+      {theme.name} Explorer &mdash; Powered by PAPI
     </footer>
   );
 }

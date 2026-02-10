@@ -155,7 +155,7 @@ function DetailRow({
       ) : link ? (
         <a
           href={link}
-          className={`text-sm text-polkadot-pink hover:underline break-all ${mono ? "font-mono" : ""}`}
+          className={`text-sm text-accent hover:underline break-all ${mono ? "font-mono" : ""}`}
         >
           {value}
         </a>

@@ -57,7 +57,7 @@ export default async function ChainPage({
       {/* Chain-scoped content */}
       <div className="card">
         <p className="text-sm text-zinc-400">
-          Viewing <code className="text-polkadot-pink">{chain.name}</code>
+          Viewing <code className="text-accent">{chain.name}</code>
           {subPath ? (
             <>
               {" "}

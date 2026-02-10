@@ -60,7 +60,7 @@ function EventRow({ event }: { event: EventSummary }) {
           {event.extrinsicId ? (
             <a
               href={`/extrinsic/${event.extrinsicId}`}
-              className="text-polkadot-pink hover:underline"
+              className="text-accent hover:underline"
             >
               {event.extrinsicId}
             </a>

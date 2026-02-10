@@ -26,7 +26,7 @@ export function AddressDisplay({
     return (
       <a
         href={`/account/${address}`}
-        className={`text-polkadot-pink hover:underline ${className}`}
+        className={`text-accent hover:underline ${className}`}
       >
         {display}
       </a>

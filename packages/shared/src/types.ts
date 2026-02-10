@@ -97,6 +97,8 @@ export interface ChainConfig {
   tokenSymbol: string;
   tokenDecimals: number;
   colorTheme: string;
+  /** Optional path to a logo image (relative to /public or absolute URL) */
+  logo?: string;
   isParachain?: boolean;
   relayChain?: string;
   addressType?: "SS58" | "H160";

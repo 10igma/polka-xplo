@@ -11,3 +11,10 @@ services:
     environment:
       ARCHIVE_NODE_URL: wss://rpc-para.ajuna.network
       CHAIN_ID: ajuna
+
+  explorer-web:
+    build:
+      args:
+        NEXT_PUBLIC_CHAIN_ID: ajuna
+    environment:
+      NEXT_PUBLIC_CHAIN_ID: ajuna

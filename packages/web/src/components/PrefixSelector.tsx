@@ -75,7 +75,7 @@ export function PrefixSelector() {
               }}
               className={`w-full text-left px-3 py-1.5 hover:bg-zinc-800 transition-colors flex items-center justify-between ${
                 prefix === p.prefix
-                  ? "text-polkadot-pink"
+                  ? "text-accent"
                   : "text-zinc-300"
               }`}
             >
@@ -105,7 +105,7 @@ export function PrefixSelector() {
                 value={custom}
                 onChange={(e) => setCustom(e.target.value)}
                 placeholder="e.g. 1328"
-                className="flex-1 bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-xs text-zinc-200 w-20 focus:outline-none focus:border-polkadot-pink"
+                className="flex-1 bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-xs text-zinc-200 w-20 focus:outline-none focus:border-accent"
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && custom) {
                     const n = parseInt(custom, 10);
