@@ -247,6 +247,58 @@ export async function getEventsByExtrinsic(
 // Account Queries
 // ============================================================
 
+export interface AccountListItem {
+  address: string;
+  publicKey: string;
+  identity: Account["identity"];
+  lastActiveBlock: number;
+  createdAtBlock: number;
+  balance: AccountBalance | null;
+  extrinsicCount: number;
+}
+
+export async function getAccounts(
+  limit = 25,
+  offset = 0
+): Promise<{ data: AccountListItem[]; total: number }> {
+  const [dataRes, countRes] = await Promise.all([
+    query<Record<string, unknown>>(
+      `SELECT a.address, a.public_key, a.identity, a.last_active_block, a.created_at_block,
+              b.free, b.reserved, b.frozen, b.flags,
+              COALESCE(ec.cnt, 0) AS extrinsic_count
+       FROM accounts a
+       LEFT JOIN account_balances b ON a.address = b.address
+       LEFT JOIN (
+         SELECT signer, COUNT(*) AS cnt FROM extrinsics WHERE signer IS NOT NULL GROUP BY signer
+       ) ec ON ec.signer = a.address
+       ORDER BY b.free::numeric DESC NULLS LAST, a.last_active_block DESC
+       LIMIT $1 OFFSET $2`,
+      [limit, offset]
+    ),
+    query<{ count: string }>(`SELECT COUNT(*) AS count FROM accounts`),
+  ]);
+
+  const total = parseInt(countRes.rows[0].count, 10);
+  const data: AccountListItem[] = dataRes.rows.map((row) => ({
+    address: row.address as string,
+    publicKey: row.public_key as string,
+    identity: row.identity as Account["identity"],
+    lastActiveBlock: Number(row.last_active_block),
+    createdAtBlock: Number(row.created_at_block),
+    balance: row.free
+      ? {
+          free: row.free as string,
+          reserved: row.reserved as string,
+          frozen: row.frozen as string,
+          flags: row.flags as string,
+        }
+      : null,
+    extrinsicCount: Number(row.extrinsic_count),
+  }));
+
+  return { data, total };
+}
+
 export async function upsertAccount(
   address: string,
   publicKey: string,

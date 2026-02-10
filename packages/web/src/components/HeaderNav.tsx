@@ -12,6 +12,9 @@ export function HeaderNav({ apiDocsUrl }: { apiDocsUrl: string }) {
       <a href="/" className="hover:text-zinc-100 transition-colors">
         Blocks
       </a>
+      <a href="/accounts" className="hover:text-zinc-100 transition-colors">
+        Accounts
+      </a>
       <a
         href="/chain-state/System/Account"
         className="hover:text-zinc-100 transition-colors"

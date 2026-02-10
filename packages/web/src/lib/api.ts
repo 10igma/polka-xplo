@@ -124,6 +124,38 @@ export async function getAccount(address: string): Promise<AccountDetail> {
   return fetchJson(`/api/accounts/${address}`);
 }
 
+// ---- Accounts List ----
+
+export interface AccountListItem {
+  address: string;
+  publicKey: string;
+  identity: { display?: string } | null;
+  lastActiveBlock: number;
+  createdAtBlock: number;
+  balance: {
+    free: string;
+    reserved: string;
+    frozen: string;
+    flags: string;
+  } | null;
+  extrinsicCount: number;
+}
+
+export interface AccountsResponse {
+  data: AccountListItem[];
+  total: number;
+  page: number;
+  pageSize: number;
+  hasMore: boolean;
+}
+
+export async function getAccounts(
+  limit = 25,
+  offset = 0
+): Promise<AccountsResponse> {
+  return fetchJson(`/api/accounts?limit=${limit}&offset=${offset}`);
+}
+
 // ---- Search ----
 
 export interface SearchResponse {

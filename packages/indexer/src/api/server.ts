@@ -14,6 +14,7 @@ import {
   getEventsByBlock,
   getEventsByExtrinsic,
   getAccount,
+  getAccounts,
   getIndexerState,
   searchByHash,
   getChainStats,
@@ -313,6 +314,82 @@ export function createApiServer(
       });
     } catch (err) {
       res.status(500).json({ error: "Failed to fetch extrinsic" });
+    }
+  });
+
+  /**
+   * @openapi
+   * /api/accounts:
+   *   get:
+   *     tags: [Accounts]
+   *     summary: List all accounts
+   *     description: Returns a paginated list of accounts sorted by balance (descending).
+   *     parameters:
+   *       - in: query
+   *         name: limit
+   *         schema:
+   *           type: integer
+   *           default: 25
+   *         description: Number of accounts per page
+   *       - in: query
+   *         name: offset
+   *         schema:
+   *           type: integer
+   *           default: 0
+   *         description: Pagination offset
+   *     responses:
+   *       200:
+   *         description: Paginated account list
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 data:
+   *                   type: array
+   *                   items:
+   *                     type: object
+   *                     properties:
+   *                       address:
+   *                         type: string
+   *                       publicKey:
+   *                         type: string
+   *                       identity:
+   *                         type: object
+   *                         nullable: true
+   *                       lastActiveBlock:
+   *                         type: integer
+   *                       createdAtBlock:
+   *                         type: integer
+   *                       balance:
+   *                         type: object
+   *                         nullable: true
+   *                       extrinsicCount:
+   *                         type: integer
+   *                 total:
+   *                   type: integer
+   *                 page:
+   *                   type: integer
+   *                 pageSize:
+   *                   type: integer
+   *                 hasMore:
+   *                   type: boolean
+   */
+  app.get("/api/accounts", async (req, res) => {
+    try {
+      const limit = Math.min(Math.max(parseInt(req.query.limit as string) || 25, 1), 100);
+      const offset = Math.max(parseInt(req.query.offset as string) || 0, 0);
+      const result = await getAccounts(limit, offset);
+      const page = Math.floor(offset / limit) + 1;
+      res.json({
+        data: result.data,
+        total: result.total,
+        page,
+        pageSize: limit,
+        hasMore: offset + limit < result.total,
+      });
+    } catch (err) {
+      res.status(500).json({ error: "Failed to fetch accounts" });
     }
   });
 
