@@ -123,17 +123,238 @@ const SIGNED_EXTENSION_PARSERS: Record<string, ExtensionParser> = {
   },
 };
 
+// ── Event Storage ─────────────────────────────────────────────────────────────
+
+/** Well-known storage key: twox128("System") ++ twox128("Events") */
+const SYSTEM_EVENTS_KEY =
+  "0x26aa394eea5630e07c48ae0c9558cef780d41e5e16056765bc8461851072c9d7";
+
+// ── SCALE Type Traversal ─────────────────────────────────────────────────────
+
+/** Skip past a SCALE-encoded value of the given type, returning the new offset. */
+function skipScaleType(
+  bytes: Uint8Array,
+  offset: number,
+  typeId: number,
+  registry: Map<number, { tag: string; value: any }>,
+  depth = 0
+): number {
+  if (depth > 64) throw new Error("Type traversal exceeded depth limit");
+
+  const typeDef = registry.get(typeId);
+  if (!typeDef) throw new Error(`Unknown type ID ${typeId}`);
+
+  switch (typeDef.tag) {
+    case "primitive": {
+      const p = (typeDef.value as { tag: string }).tag;
+      if (p === "bool" || p === "u8" || p === "i8") return offset + 1;
+      if (p === "u16" || p === "i16") return offset + 2;
+      if (p === "u32" || p === "i32" || p === "char") return offset + 4;
+      if (p === "u64" || p === "i64") return offset + 8;
+      if (p === "u128" || p === "i128") return offset + 16;
+      if (p === "u256" || p === "i256") return offset + 32;
+      if (p === "str") {
+        const len = readCompact(bytes, offset);
+        return len.offset + len.value;
+      }
+      throw new Error(`Unknown primitive: ${p}`);
+    }
+    case "compact":
+      return readCompact(bytes, offset).offset;
+    case "sequence": {
+      const elemType = typeDef.value as number;
+      const len = readCompact(bytes, offset);
+      offset = len.offset;
+      const elemDef = registry.get(elemType);
+      if (elemDef?.tag === "primitive" && (elemDef.value as { tag: string }).tag === "u8") {
+        return offset + len.value; // Vec<u8> fast-path
+      }
+      for (let i = 0; i < len.value; i++) {
+        offset = skipScaleType(bytes, offset, elemType, registry, depth + 1);
+      }
+      return offset;
+    }
+    case "array": {
+      const { len, type: elemType } = typeDef.value as { len: number; type: number };
+      const elemDef = registry.get(elemType);
+      if (elemDef?.tag === "primitive" && (elemDef.value as { tag: string }).tag === "u8") {
+        return offset + len; // [u8; N] fast-path
+      }
+      for (let i = 0; i < len; i++) {
+        offset = skipScaleType(bytes, offset, elemType, registry, depth + 1);
+      }
+      return offset;
+    }
+    case "tuple": {
+      for (const ft of typeDef.value as number[]) {
+        offset = skipScaleType(bytes, offset, ft, registry, depth + 1);
+      }
+      return offset;
+    }
+    case "composite": {
+      for (const field of typeDef.value as Array<{ type: number }>) {
+        offset = skipScaleType(bytes, offset, field.type, registry, depth + 1);
+      }
+      return offset;
+    }
+    case "variant": {
+      const vi = bytes[offset++];
+      const variants = typeDef.value as Array<{ index: number; fields: Array<{ type: number }> }>;
+      const variant = variants.find((v) => v.index === vi);
+      if (!variant) throw new Error(`Unknown variant ${vi} in type ${typeId}`);
+      for (const field of variant.fields ?? []) {
+        offset = skipScaleType(bytes, offset, field.type, registry, depth + 1);
+      }
+      return offset;
+    }
+    case "bitSequence": {
+      const bitLen = readCompact(bytes, offset);
+      return bitLen.offset + Math.ceil(bitLen.value / 8);
+    }
+    default:
+      throw new Error(`Unknown type tag: ${typeDef.tag}`);
+  }
+}
+
+/**
+ * Read a SCALE-encoded value, producing a JavaScript value for common types.
+ * Falls back to hex strings for complex or unknown types.
+ */
+function readScaleValue(
+  bytes: Uint8Array,
+  startOffset: number,
+  typeId: number,
+  registry: Map<number, { tag: string; value: any }>,
+  depth = 0
+): { value: unknown; offset: number } {
+  if (depth > 16) {
+    const end = skipScaleType(bytes, startOffset, typeId, registry, depth);
+    return { value: "0x" + bytesToHex(bytes.slice(startOffset, end)), offset: end };
+  }
+
+  const typeDef = registry.get(typeId);
+  if (!typeDef) return { value: null, offset: startOffset };
+
+  try {
+    switch (typeDef.tag) {
+      case "primitive": {
+        const p = (typeDef.value as { tag: string }).tag;
+        if (p === "bool") return { value: bytes[startOffset] !== 0, offset: startOffset + 1 };
+        if (p === "u8") return { value: bytes[startOffset], offset: startOffset + 1 };
+        if (p === "u16") return { value: bytes[startOffset] | (bytes[startOffset + 1] << 8), offset: startOffset + 2 };
+        if (p === "u32")
+          return {
+            value: ((bytes[startOffset] | (bytes[startOffset + 1] << 8) | (bytes[startOffset + 2] << 16) | (bytes[startOffset + 3] << 24)) >>> 0),
+            offset: startOffset + 4,
+          };
+        if (p === "u64") {
+          let v = BigInt(0);
+          for (let i = 0; i < 8; i++) v |= BigInt(bytes[startOffset + i]) << BigInt(i * 8);
+          return { value: v.toString(), offset: startOffset + 8 };
+        }
+        if (p === "u128") {
+          let v = BigInt(0);
+          for (let i = 0; i < 16; i++) v |= BigInt(bytes[startOffset + i]) << BigInt(i * 8);
+          return { value: v.toString(), offset: startOffset + 16 };
+        }
+        break;
+      }
+      case "compact":
+        return readCompact(bytes, startOffset);
+      case "array": {
+        const { len, type: elemType } = typeDef.value as { len: number; type: number };
+        const elemDef = registry.get(elemType);
+        if (elemDef?.tag === "primitive" && (elemDef.value as { tag: string }).tag === "u8") {
+          return { value: "0x" + bytesToHex(bytes.slice(startOffset, startOffset + len)), offset: startOffset + len };
+        }
+        break;
+      }
+      case "composite": {
+        const fields = typeDef.value as Array<{ name?: string; type: number }>;
+        if (fields.length === 1) {
+          return readScaleValue(bytes, startOffset, fields[0].type, registry, depth + 1);
+        }
+        const obj: Record<string, unknown> = {};
+        let off = startOffset;
+        for (const field of fields) {
+          const r = readScaleValue(bytes, off, field.type, registry, depth + 1);
+          obj[field.name ?? `_${field.type}`] = r.value;
+          off = r.offset;
+        }
+        return { value: obj, offset: off };
+      }
+      case "variant": {
+        const idx = bytes[startOffset];
+        const off1 = startOffset + 1;
+        const variants = typeDef.value as Array<{
+          name: string;
+          index: number;
+          fields: Array<{ name?: string; type: number }>;
+        }>;
+        const variant = variants.find((v) => v.index === idx);
+        if (!variant) break;
+        if (variant.fields.length === 0) return { value: variant.name, offset: off1 };
+        if (variant.fields.length === 1 && !variant.fields[0].name) {
+          const inner = readScaleValue(bytes, off1, variant.fields[0].type, registry, depth + 1);
+          return { value: { [variant.name]: inner.value }, offset: inner.offset };
+        }
+        const obj: Record<string, unknown> = {};
+        let off = off1;
+        for (const field of variant.fields) {
+          const r = readScaleValue(bytes, off, field.type, registry, depth + 1);
+          obj[field.name ?? `_${field.type}`] = r.value;
+          off = r.offset;
+        }
+        return { value: { [variant.name]: obj }, offset: off };
+      }
+      case "sequence": {
+        const elemType = typeDef.value as number;
+        const elemDef = registry.get(elemType);
+        const len = readCompact(bytes, startOffset);
+        if (elemDef?.tag === "primitive" && (elemDef.value as { tag: string }).tag === "u8") {
+          return {
+            value: "0x" + bytesToHex(bytes.slice(len.offset, len.offset + len.value)),
+            offset: len.offset + len.value,
+          };
+        }
+        break;
+      }
+    }
+  } catch {
+    // Fall through to hex fallback
+  }
+
+  const end = skipScaleType(bytes, startOffset, typeId, registry, depth);
+  return { value: "0x" + bytesToHex(bytes.slice(startOffset, end)), offset: end };
+}
+
 // ── Types ────────────────────────────────────────────────────────────────────
+
+interface EventVariant {
+  name: string;
+  fields: { name: string | null; typeId: number }[];
+}
 
 interface PalletCallLookup {
   palletsByIndex: Map<number, { name: string; calls: Map<number, string> }>;
   signedExtensions: string[];
+  eventsByPalletIndex: Map<number, Map<number, EventVariant>>;
+  rawTypes: Map<number, { tag: string; value: any }>;
 }
 
 export interface DecodedCallInfo {
   module: string;
   call: string;
   signer: string | null;
+}
+
+export interface DecodedEvent {
+  index: number;
+  extrinsicIndex: number | null;
+  module: string;
+  event: string;
+  data: Record<string, unknown>;
+  phaseType: "ApplyExtrinsic" | "Finalization" | "Initialization";
 }
 
 // ── ExtrinsicDecoder ─────────────────────────────────────────────────────────
@@ -297,6 +518,102 @@ export class ExtrinsicDecoder {
     }
   }
 
+  /**
+   * Decode all events from a block by reading System.Events storage.
+   * Returns an array matching the RawEvent interface from block-processor.
+   */
+  async decodeEvents(
+    blockHash: string,
+    lookup: PalletCallLookup
+  ): Promise<DecodedEvent[]> {
+    try {
+      const storageHex: string | null = await this.rpcCall(
+        "state_getStorage",
+        [SYSTEM_EVENTS_KEY, blockHash]
+      );
+      if (!storageHex) return [];
+
+      const bytes = hexToBytes(storageHex);
+      let offset = 0;
+
+      // Vec<EventRecord>: compact length prefix
+      const count = readCompact(bytes, offset);
+      offset = count.offset;
+
+      const events: DecodedEvent[] = [];
+
+      for (let i = 0; i < count.value; i++) {
+        // ── Phase ──
+        const phaseTag = bytes[offset++];
+        let phaseType: DecodedEvent["phaseType"];
+        let extrinsicIndex: number | null = null;
+
+        if (phaseTag === 0) {
+          // ApplyExtrinsic(u32) — little-endian
+          extrinsicIndex =
+            bytes[offset] |
+            (bytes[offset + 1] << 8) |
+            (bytes[offset + 2] << 16) |
+            (bytes[offset + 3] << 24);
+          offset += 4;
+          phaseType = "ApplyExtrinsic";
+        } else if (phaseTag === 1) {
+          phaseType = "Finalization";
+        } else {
+          phaseType = "Initialization";
+        }
+
+        // ── RuntimeEvent outer enum ──
+        // [pallet variant idx] [inner Event enum variant idx] [fields...]
+        const palletIndex = bytes[offset++];
+        const eventIndex = bytes[offset++];
+
+        const palletName =
+          lookup.palletsByIndex.get(palletIndex)?.name ?? `Pallet(${palletIndex})`;
+        const eventVariant = lookup.eventsByPalletIndex
+          .get(palletIndex)
+          ?.get(eventIndex);
+        const eventName = eventVariant?.name ?? `event(${eventIndex})`;
+
+        // ── Event data fields ──
+        const data: Record<string, unknown> = {};
+        if (eventVariant?.fields && eventVariant.fields.length > 0) {
+          for (const field of eventVariant.fields) {
+            const r = readScaleValue(
+              bytes,
+              offset,
+              field.typeId,
+              lookup.rawTypes
+            );
+            data[field.name ?? `_${field.typeId}`] = r.value;
+            offset = r.offset;
+          }
+        }
+
+        // ── Topics: Vec<H256> ──
+        const topicCount = readCompact(bytes, offset);
+        offset = topicCount.offset + topicCount.value * 32;
+
+        events.push({
+          index: i,
+          extrinsicIndex,
+          module: palletName,
+          event: eventName,
+          data,
+          phaseType,
+        });
+      }
+
+      return events;
+    } catch (err) {
+      console.error(
+        `[ExtrinsicDecoder] Failed to decode events for ${blockHash}:`,
+        err
+      );
+      return [];
+    }
+  }
+
   // ── Private helpers ──────────────────────────────────────────────────────
 
   private resolvePalletName(
@@ -362,12 +679,44 @@ export class ExtrinsicDecoder {
       palletsByIndex.set(pallet.index, { name: pallet.name, calls });
     }
 
+    // Build raw type registry for SCALE traversal
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const rawTypes = new Map<number, { tag: string; value: any }>();
+    for (const entry of v.lookup as Array<{ id: number; def: { tag: string; value: any } }>) {
+      rawTypes.set(entry.id, entry.def);
+    }
+
+    // Build event lookup: pallet index → Map<event_variant_idx → EventVariant>
+    const eventsByPalletIndex = new Map<number, Map<number, EventVariant>>();
+    for (const pallet of v.pallets as Array<{ name: string; index: number; events?: number }>) {
+      if (pallet.events != null) {
+        const evtMap = new Map<number, EventVariant>();
+        const typeEntry = rawTypes.get(pallet.events);
+        if (typeEntry && typeEntry.tag === "variant") {
+          for (const variant of typeEntry.value as Array<{
+            name: string;
+            index: number;
+            fields: Array<{ name?: string; type: number }>;
+          }>) {
+            evtMap.set(variant.index, {
+              name: variant.name,
+              fields: (variant.fields ?? []).map((f) => ({
+                name: f.name ?? null,
+                typeId: f.type,
+              })),
+            });
+          }
+        }
+        eventsByPalletIndex.set(pallet.index, evtMap);
+      }
+    }
+
     // Extract signed extension identifiers
     const signedExtensions: string[] = (
       (v.extrinsic.signedExtensions ?? []) as Array<{ identifier: string }>
     ).map((ext) => ext.identifier);
 
-    return { palletsByIndex, signedExtensions };
+    return { palletsByIndex, signedExtensions, eventsByPalletIndex, rawTypes };
   }
 
   private async rpcCall(method: string, params: unknown[]): Promise<any> {

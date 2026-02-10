@@ -21,14 +21,15 @@ function exec(sql: string, params: unknown[], client?: Queryable): Promise<unkno
 
 export async function insertBlock(block: Block, client?: DbClient): Promise<void> {
   await exec(
-    `INSERT INTO blocks (height, hash, parent_hash, state_root, extrinsics_root, timestamp, validator_id, status, spec_version, event_count, extrinsic_count)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+    `INSERT INTO blocks (height, hash, parent_hash, state_root, extrinsics_root, timestamp, validator_id, status, spec_version, event_count, extrinsic_count, digest_logs)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
      ON CONFLICT (height) DO UPDATE SET
        hash = EXCLUDED.hash,
        parent_hash = EXCLUDED.parent_hash,
        status = EXCLUDED.status,
        event_count = EXCLUDED.event_count,
-       extrinsic_count = EXCLUDED.extrinsic_count`,
+       extrinsic_count = EXCLUDED.extrinsic_count,
+       digest_logs = EXCLUDED.digest_logs`,
     [
       block.height,
       block.hash,
@@ -41,6 +42,7 @@ export async function insertBlock(block: Block, client?: DbClient): Promise<void
       block.specVersion,
       block.eventCount,
       block.extrinsicCount,
+      JSON.stringify(block.digestLogs ?? []),
     ],
     client
   );
@@ -56,7 +58,7 @@ export async function getBlockByHeight(
   height: number
 ): Promise<Block | null> {
   const result = await query<Record<string, unknown>>(
-    `SELECT height, hash, parent_hash, state_root, extrinsics_root, timestamp, validator_id, status, spec_version, event_count, extrinsic_count
+    `SELECT height, hash, parent_hash, state_root, extrinsics_root, timestamp, validator_id, status, spec_version, event_count, extrinsic_count, digest_logs
      FROM blocks WHERE height = $1`,
     [height]
   );
@@ -65,7 +67,7 @@ export async function getBlockByHeight(
 
 export async function getBlockByHash(hash: string): Promise<Block | null> {
   const result = await query<Record<string, unknown>>(
-    `SELECT height, hash, parent_hash, state_root, extrinsics_root, timestamp, validator_id, status, spec_version, event_count, extrinsic_count
+    `SELECT height, hash, parent_hash, state_root, extrinsics_root, timestamp, validator_id, status, spec_version, event_count, extrinsic_count, digest_logs
      FROM blocks WHERE hash = $1`,
     [hash]
   );
@@ -78,7 +80,7 @@ export async function getLatestBlocks(
 ): Promise<{ blocks: Block[]; total: number }> {
   const [dataResult, countResult] = await Promise.all([
     query<Record<string, unknown>>(
-      `SELECT height, hash, parent_hash, state_root, extrinsics_root, timestamp, validator_id, status, spec_version, event_count, extrinsic_count
+      `SELECT height, hash, parent_hash, state_root, extrinsics_root, timestamp, validator_id, status, spec_version, event_count, extrinsic_count, digest_logs
        FROM blocks ORDER BY height DESC LIMIT $1 OFFSET $2`,
       [limit, offset]
     ),
@@ -367,6 +369,13 @@ export async function searchByHash(
 // ============================================================
 
 function mapBlock(row: Record<string, unknown>): Block {
+  const rawLogs = row.digest_logs;
+  let digestLogs: Block["digestLogs"] = [];
+  if (typeof rawLogs === "string") {
+    try { digestLogs = JSON.parse(rawLogs); } catch { /* empty */ }
+  } else if (Array.isArray(rawLogs)) {
+    digestLogs = rawLogs as Block["digestLogs"];
+  }
   return {
     height: Number(row.height),
     hash: row.hash as string,
@@ -379,6 +388,7 @@ function mapBlock(row: Record<string, unknown>): Block {
     specVersion: Number(row.spec_version),
     eventCount: Number(row.event_count),
     extrinsicCount: Number(row.extrinsic_count),
+    digestLogs,
   };
 }
 

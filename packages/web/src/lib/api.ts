@@ -46,6 +46,7 @@ export interface BlockDetail {
     stateRoot: string;
     extrinsicsRoot: string;
     specVersion: number;
+    digestLogs: { type: string; engine: string | null; data: string }[];
   };
   extrinsics: ExtrinsicSummary[];
   events: EventSummary[];

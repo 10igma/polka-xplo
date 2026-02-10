@@ -22,6 +22,7 @@ export interface RawBlockData {
   extrinsicsRoot: string;
   extrinsics: RawExtrinsic[];
   events: RawEvent[];
+  digestLogs: { type: string; engine: string | null; data: string }[];
   timestamp: number | null;
   validatorId: string | null;
   specVersion: number;
@@ -79,6 +80,7 @@ export async function processBlock(
       specVersion: raw.specVersion,
       eventCount: raw.events.length,
       extrinsicCount: raw.extrinsics.length,
+      digestLogs: raw.digestLogs,
     };
 
     await insertBlock(block, client);

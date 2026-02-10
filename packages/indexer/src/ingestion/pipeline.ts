@@ -7,7 +7,7 @@ import {
   upsertIndexerState,
   finalizeBlock,
 } from "@polka-xplo/db";
-import type { BlockStatus } from "@polka-xplo/shared";
+import type { BlockStatus, DigestLog } from "@polka-xplo/shared";
 
 /**
  * The Ingestion Pipeline manages the dual-stream architecture:
@@ -246,6 +246,17 @@ export class IngestionPipeline {
         }
       );
 
+      // Decode events from System.Events storage
+      const decodedEvents = await this.decoder.decodeEvents(blockHash, lookup);
+      const events: RawBlockData["events"] = decodedEvents.map((evt) => ({
+        index: evt.index,
+        extrinsicIndex: evt.extrinsicIndex,
+        module: evt.module,
+        event: evt.event,
+        data: evt.data,
+        phaseType: evt.phaseType,
+      }));
+
       const hasRuntimeUpgrade = header.digests.some(
         (d) => d.type === "runtimeUpdated"
       );
@@ -255,6 +266,19 @@ export class IngestionPipeline {
         );
       }
 
+      // Parse PAPI digest items into our DigestLog format
+      const digestLogs: DigestLog[] = header.digests.map((d) => {
+        const type = d.type === "runtimeUpdated"
+          ? "runtimeEnvironmentUpdated"
+          : d.type;
+        const value = d.value as { engine?: string; payload?: string } | undefined;
+        return {
+          type,
+          engine: value?.engine ?? null,
+          data: value?.payload ?? "",
+        };
+      });
+
       return {
         number: header.number,
         hash: blockHash,
@@ -262,7 +286,8 @@ export class IngestionPipeline {
         stateRoot: header.stateRoot,
         extrinsicsRoot: header.extrinsicRoot,
         extrinsics,
-        events: [],
+        events,
+        digestLogs,
         timestamp,
         validatorId: null,
         specVersion: 0,
@@ -352,6 +377,22 @@ export class IngestionPipeline {
         }
       );
 
+      // Decode events from System.Events storage
+      const decodedEvents = await this.decoder.decodeEvents(hash, lookup);
+      const events: RawBlockData["events"] = decodedEvents.map((evt) => ({
+        index: evt.index,
+        extrinsicIndex: evt.extrinsicIndex,
+        module: evt.module,
+        event: evt.event,
+        data: evt.data,
+        phaseType: evt.phaseType,
+      }));
+
+      // Parse legacy RPC digest logs
+      const digestLogs: DigestLog[] = (header.digest?.logs ?? []).map(
+        (hexLog: string) => parseDigestLogHex(hexLog)
+      );
+
       return {
         number: blockNumber,
         hash,
@@ -359,7 +400,8 @@ export class IngestionPipeline {
         stateRoot: header.stateRoot,
         extrinsicsRoot: header.extrinsicsRoot,
         extrinsics,
-        events: [],
+        events,
+        digestLogs,
         timestamp,
         validatorId: null,
         specVersion: 0,
@@ -421,4 +463,39 @@ export class IngestionPipeline {
       return 0;
     }
   }
+}
+
+// ============================================================
+// Digest Log Parsing (Legacy RPC hex-encoded DigestItem)
+// ============================================================
+
+const DIGEST_TYPES: Record<number, string> = {
+  0: "other",
+  4: "consensus",
+  5: "seal",
+  6: "preRuntime",
+  8: "runtimeEnvironmentUpdated",
+};
+
+/** Parse a single hex-encoded SCALE DigestItem from legacy JSON-RPC */
+function parseDigestLogHex(hex: string): DigestLog {
+  const clean = hex.startsWith("0x") ? hex.slice(2) : hex;
+  const typeTag = parseInt(clean.slice(0, 2), 16);
+  const type = DIGEST_TYPES[typeTag] ?? `unknown(${typeTag})`;
+
+  // PreRuntime, Consensus, Seal all have: [type_u8] [engine_id: 4 bytes] [SCALE Vec<u8>]
+  if (typeTag === 4 || typeTag === 5 || typeTag === 6) {
+    const engineHex = clean.slice(2, 10); // 4 bytes = 8 hex chars
+    const engine = Buffer.from(engineHex, "hex").toString("ascii");
+    const data = "0x" + clean.slice(10);
+    return { type, engine, data };
+  }
+
+  // RuntimeEnvironmentUpdated: no payload
+  if (typeTag === 8) {
+    return { type, engine: null, data: "" };
+  }
+
+  // Other: rest is SCALE Vec<u8>
+  return { type, engine: null, data: "0x" + clean.slice(2) };
 }

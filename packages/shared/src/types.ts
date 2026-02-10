@@ -5,6 +5,13 @@
 /** Block status representing finality */
 export type BlockStatus = "best" | "finalized";
 
+/** Parsed digest log from a block header */
+export interface DigestLog {
+  type: string;           // "preRuntime" | "consensus" | "seal" | "other" | "runtimeEnvironmentUpdated"
+  engine: string | null;  // 4-byte ASCII engine id, e.g. "aura", "FRNK"
+  data: string;           // hex-encoded payload
+}
+
 /** Core block record stored in the database */
 export interface Block {
   height: number;
@@ -18,6 +25,7 @@ export interface Block {
   specVersion: number;
   eventCount: number;
   extrinsicCount: number;
+  digestLogs: DigestLog[];
 }
 
 /** Decoded extrinsic record */
