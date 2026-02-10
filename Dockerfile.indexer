@@ -1,22 +1,57 @@
-FROM node:20-alpine AS base
+FROM node:20-alpine AS build
 WORKDIR /app
 
-# Install dependencies
-COPY package.json package-lock.json* ./
+# Copy root workspace config
+COPY package.json turbo.json tsconfig.base.json ./
+
+# Copy all workspace package.json files for dependency resolution
 COPY packages/shared/package.json ./packages/shared/
 COPY packages/db/package.json ./packages/db/
 COPY packages/indexer/package.json ./packages/indexer/
-RUN npm install --workspace=packages/shared --workspace=packages/db --workspace=packages/indexer
+COPY packages/web/package.json ./packages/web/
 
-# Copy source
-COPY tsconfig.base.json ./
+# Install all dependencies (workspaces need the full graph)
+RUN npm install
+
+# Copy source code
 COPY packages/shared/ ./packages/shared/
 COPY packages/db/ ./packages/db/
 COPY packages/indexer/ ./packages/indexer/
 COPY extensions/ ./extensions/
+COPY chain-config.json ./
 
-# Build
-RUN npx turbo run build --filter=@polka-xplo/indexer
+# Build packages in dependency order
+RUN npx tsc -p packages/shared/tsconfig.json
+RUN npx tsc -p packages/db/tsconfig.json
+RUN npx tsc -p packages/indexer/tsconfig.json
 
-# Run migrations and start
+# --- Production stage ---
+FROM node:20-alpine AS runner
+WORKDIR /app
+
+ENV NODE_ENV=production
+
+# Copy root workspace config
+COPY package.json turbo.json tsconfig.base.json ./
+COPY packages/shared/package.json ./packages/shared/
+COPY packages/db/package.json ./packages/db/
+COPY packages/indexer/package.json ./packages/indexer/
+COPY packages/web/package.json ./packages/web/
+
+# Install production dependencies only
+RUN npm install --omit=dev
+
+# Copy built output
+COPY --from=build /app/packages/shared/dist/ ./packages/shared/dist/
+COPY --from=build /app/packages/db/dist/ ./packages/db/dist/
+
+# Copy SQL migration files (needed at runtime by migrate.ts)
+COPY packages/db/src/migrations/ ./packages/db/src/migrations/
+
+COPY --from=build /app/packages/indexer/dist/ ./packages/indexer/dist/
+COPY extensions/ ./extensions/
+COPY chain-config.json ./
+
+EXPOSE 3001
+
 CMD ["sh", "-c", "node packages/db/dist/migrate.js && node packages/indexer/dist/index.js"]

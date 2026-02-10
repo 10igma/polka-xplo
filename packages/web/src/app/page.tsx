@@ -1,4 +1,4 @@
-import { getBlocks } from "@/lib/api";
+import { getBlocks, type BlockSummary } from "@/lib/api";
 import { BlockList } from "@/components/BlockList";
 import { OmniSearch } from "@/components/OmniSearch";
 
@@ -7,7 +7,7 @@ import { OmniSearch } from "@/components/OmniSearch";
  * Rendered as a Server Component for fast initial load + SEO.
  */
 export default async function HomePage() {
-  let blocks;
+  let blocks: BlockSummary[];
   let error: string | null = null;
 
   try {
