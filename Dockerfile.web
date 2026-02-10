@@ -1,32 +1,44 @@
-FROM node:20-alpine AS base
+FROM node:20-alpine AS build
 WORKDIR /app
 
-# Install dependencies
-COPY package.json package-lock.json* ./
-COPY packages/shared/package.json ./packages/shared/
-COPY packages/web/package.json ./packages/web/
-RUN npm install --workspace=packages/shared --workspace=packages/web
+# Copy root workspace config
+COPY package.json turbo.json tsconfig.base.json ./
 
-# Copy source
-COPY tsconfig.base.json ./
+# Copy all workspace package.json files for dependency resolution
+COPY packages/shared/package.json ./packages/shared/
+COPY packages/db/package.json ./packages/db/
+COPY packages/indexer/package.json ./packages/indexer/
+COPY packages/web/package.json ./packages/web/
+
+# Install all dependencies (workspaces need the full graph)
+RUN npm install
+
+# Copy source code
 COPY packages/shared/ ./packages/shared/
 COPY packages/web/ ./packages/web/
 COPY extensions/ ./extensions/
+COPY chain-config.json ./
 
-# Build
+# Build shared first (web depends on it)
+RUN npx tsc -p packages/shared/tsconfig.json
+
+# Build the Next.js frontend
 ENV NEXT_TELEMETRY_DISABLED=1
-RUN npx turbo run build --filter=@polka-xplo/web
+RUN cd packages/web && npx next build
 
-# Production image
+# --- Production stage ---
 FROM node:20-alpine AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
-COPY --from=base /app/packages/web/.next/standalone ./
-COPY --from=base /app/packages/web/.next/static ./packages/web/.next/static
-COPY --from=base /app/packages/web/public ./packages/web/public
+# Copy the standalone output (includes minimal node_modules)
+COPY --from=build /app/packages/web/.next/standalone ./
+# Copy static assets (not included in standalone)
+COPY --from=build /app/packages/web/.next/static ./packages/web/.next/static
 
 EXPOSE 3000
+
+# The standalone server.js is at the web package path within the monorepo mirror
 CMD ["node", "packages/web/server.js"]

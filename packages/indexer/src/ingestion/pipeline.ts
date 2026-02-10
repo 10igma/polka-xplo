@@ -5,7 +5,6 @@ import {
   getLastFinalizedHeight,
   upsertIndexerState,
   finalizeBlock,
-  pruneForkedBlocks,
 } from "@polka-xplo/db";
 import type { BlockStatus } from "@polka-xplo/shared";
 
@@ -15,6 +14,14 @@ import type { BlockStatus } from "@polka-xplo/shared";
  * 2. The Live (Best Head) Stream — optimistic updates
  *
  * It also handles backfilling gaps when the indexer restarts.
+ *
+ * PAPI PolkadotClient API used:
+ * - client.finalizedBlock$        → Observable<BlockInfo>  { hash, number, parent }
+ * - client.bestBlocks$            → Observable<BlockInfo[]> [best, ..., finalized]
+ * - client.getFinalizedBlock()    → Promise<BlockInfo>
+ * - client.getBestBlocks()        → Promise<BlockInfo[]>
+ * - client.getBlockHeader(hash?)  → Promise<BlockHeader>   { parentHash, number, stateRoot, extrinsicRoot, digests }
+ * - client.getBlockBody(hash)     → Promise<HexString[]>   (SCALE-encoded extrinsics)
  */
 export class IngestionPipeline {
   private papiClient: PapiClient;
@@ -82,7 +89,7 @@ export class IngestionPipeline {
       const blockPromises: Promise<void>[] = [];
 
       for (let height = start; height <= end; height++) {
-        blockPromises.push(this.fetchAndProcess(height, "finalized"));
+        blockPromises.push(this.fetchAndProcessByHash(null, height, "finalized"));
       }
 
       await Promise.all(blockPromises);
@@ -102,16 +109,14 @@ export class IngestionPipeline {
   private subscribeFinalized(): void {
     const { client } = this.papiClient;
 
-    // Use PAPI's finalized block observable
     const sub = client.finalizedBlock$.subscribe({
       next: async (block) => {
         try {
-          const height = block.number;
-          console.log(`[Pipeline:${this.chainId}] Finalized block #${height}`);
+          console.log(`[Pipeline:${this.chainId}] Finalized block #${block.number}`);
 
-          await this.fetchAndProcess(height, "finalized");
-          await finalizeBlock(height);
-          await upsertIndexerState(this.chainId, height, height, "live");
+          await this.fetchAndProcessByHash(block.hash, block.number, "finalized");
+          await finalizeBlock(block.number);
+          await upsertIndexerState(this.chainId, block.number, block.number, "live");
         } catch (err) {
           console.error(`[Pipeline:${this.chainId}] Error processing finalized block:`, err);
         }
@@ -131,15 +136,12 @@ export class IngestionPipeline {
     const sub = client.bestBlocks$.subscribe({
       next: async (blocks) => {
         try {
-          // bestBlocks$ emits an array of blocks in the best chain
-          // We process only the latest
-          const latest = blocks[blocks.length - 1];
+          // bestBlocks$ emits [best, ..., finalized]
+          const latest = blocks[0];
           if (!latest) return;
 
-          const height = latest.number;
-          console.log(`[Pipeline:${this.chainId}] Best block #${height}`);
-
-          await this.fetchAndProcess(height, "best");
+          console.log(`[Pipeline:${this.chainId}] Best block #${latest.number}`);
+          await this.fetchAndProcessByHash(latest.hash, latest.number, "best");
         } catch (err) {
           console.error(`[Pipeline:${this.chainId}] Error processing best block:`, err);
         }
@@ -152,121 +154,92 @@ export class IngestionPipeline {
     this.bestUnsub = () => sub.unsubscribe();
   }
 
-  /** Fetch a block from the node and run it through the processor */
-  private async fetchAndProcess(
+  /**
+   * Fetch a block by its hash (from subscription) and run it through the processor.
+   * If hash is null (backfill by height), we look it up from the best/finalized blocks.
+   */
+  private async fetchAndProcessByHash(
+    blockHash: string | null,
     height: number,
     status: BlockStatus
   ): Promise<void> {
-    const rawBlock = await this.fetchBlock(height);
+    const rawBlock = await this.fetchBlock(blockHash, height);
     if (!rawBlock) {
       console.warn(`[Pipeline:${this.chainId}] Could not fetch block #${height}`);
       return;
-    }
-
-    // Detect runtime upgrades
-    if (rawBlock.specVersion !== (await this.getLastSpecVersion())) {
-      console.log(
-        `[Pipeline:${this.chainId}] Runtime upgrade detected at block #${height} (spec ${rawBlock.specVersion})`
-      );
-      // In production: pause, re-fetch metadata, rebuild descriptors
-      // For now: log and continue with updated specVersion tracking
     }
 
     await processBlock(rawBlock, status, this.registry);
   }
 
   /**
-   * Fetch and decode a block using PAPI.
-   * This extracts headers, extrinsics, and events into our normalized format.
+   * Fetch and extract a block using PAPI's PolkadotClient.
+   *
+   * PAPI's raw client returns:
+   * - getBlockHeader(hash): { parentHash, number, stateRoot, extrinsicRoot, digests }
+   * - getBlockBody(hash):   HexString[] (SCALE-encoded extrinsics)
+   *
+   * Full decoding of extrinsics and events requires a TypedApi with
+   * chain-specific descriptors (generated via `npx papi add`). Without
+   * descriptors, we store extrinsic count and raw hex data. Once descriptors
+   * are added, the fetchBlock method can decode module/call/args fully.
    */
-  private async fetchBlock(height: number): Promise<RawBlockData | null> {
+  private async fetchBlock(
+    blockHash: string | null,
+    height: number
+  ): Promise<RawBlockData | null> {
     try {
       const { client } = this.papiClient;
-      const blockHash = await client.getBlockHash(height);
-      const body = await client.getBlockBody(blockHash);
-      const header = await client.getBlockHeader(blockHash);
 
-      // Decode extrinsics using PAPI's runtime metadata
-      const extrinsics: RawBlockData["extrinsics"] = [];
-      const events: RawBlockData["events"] = [];
-
-      // Process body extrinsics
-      if (body) {
-        for (let i = 0; i < body.length; i++) {
-          const ext = body[i];
-          extrinsics.push({
-            index: i,
-            hash: ext.hash ?? `${blockHash}-${i}`,
-            signer: ext.address?.toString() ?? null,
-            module: ext.callData?.type ?? "Unknown",
-            call: ext.callData?.value?.type ?? "unknown",
-            args: ext.callData?.value?.value
-              ? this.safeSerialize(ext.callData.value.value)
-              : {},
-            success: true, // Updated by event correlation
-            fee: null,
-            tip: null,
-          });
-        }
+      // Resolve hash: from subscription data, or look up
+      let hash = blockHash;
+      if (!hash) {
+        hash = await this.resolveBlockHash(height);
+        if (!hash) return null;
       }
 
-      // Fetch events for this block
-      const blockEvents = await client.getEvents(blockHash);
-      if (blockEvents) {
-        for (let i = 0; i < blockEvents.length; i++) {
-          const evt = blockEvents[i];
-          const phase = evt.phase;
+      const [header, body] = await Promise.all([
+        client.getBlockHeader(hash),
+        client.getBlockBody(hash),
+      ]);
 
-          let phaseType: "ApplyExtrinsic" | "Finalization" | "Initialization" =
-            "Initialization";
-          let extrinsicIndex: number | null = null;
-
-          if (phase.type === "ApplyExtrinsic") {
-            phaseType = "ApplyExtrinsic";
-            extrinsicIndex = phase.value;
-
-            // Mark extrinsic as failed if we see ExtrinsicFailed
-            if (evt.event?.type === "System" && evt.event?.value?.type === "ExtrinsicFailed") {
-              const ext = extrinsics[extrinsicIndex];
-              if (ext) ext.success = false;
-            }
-          } else if (phase.type === "Finalization") {
-            phaseType = "Finalization";
-          }
-
-          events.push({
-            index: i,
-            extrinsicIndex,
-            module: evt.event?.type ?? "Unknown",
-            event: evt.event?.value?.type ?? "unknown",
-            data: evt.event?.value?.value
-              ? this.safeSerialize(evt.event.value.value)
-              : {},
-            phaseType,
-          });
-        }
-      }
-
-      // Extract timestamp from Timestamp.set extrinsic
-      let timestamp: number | null = null;
-      const timestampExt = extrinsics.find(
-        (e) => e.module === "Timestamp" && e.call === "set"
+      // Body is HexString[] — each element is a SCALE-encoded extrinsic.
+      // Without chain descriptors we store them with minimal metadata.
+      const extrinsics: RawBlockData["extrinsics"] = body.map(
+        (encodedExt, i) => ({
+          index: i,
+          hash: `${hash}-${i}`,
+          signer: null,
+          module: "Unknown",
+          call: "unknown",
+          args: { raw: encodedExt },
+          success: true,
+          fee: null,
+          tip: null,
+        })
       );
-      if (timestampExt?.args?.now) {
-        timestamp = Number(timestampExt.args.now);
+
+      // Check digests for runtime upgrade flag
+      const hasRuntimeUpgrade = header.digests.some(
+        (d) => d.type === "runtimeUpdated"
+      );
+      if (hasRuntimeUpgrade) {
+        console.log(
+          `[Pipeline:${this.chainId}] Runtime upgrade detected at block #${height}`
+        );
       }
 
       return {
-        number: height,
-        hash: blockHash,
+        number: header.number,
+        hash,
         parentHash: header.parentHash,
         stateRoot: header.stateRoot,
-        extrinsicsRoot: header.extrinsicsRoot,
+        extrinsicsRoot: header.extrinsicRoot,
         extrinsics,
-        events,
-        timestamp,
-        validatorId: null, // Extracted from consensus digest
-        specVersion: header.specVersion ?? 0,
+        events: [], // Requires TypedApi with descriptors for decoding
+        timestamp: null, // Requires decoding the Timestamp.set inherent
+        validatorId: null,
+        specVersion: 0,
       };
     } catch (err) {
       console.error(`[Pipeline:${this.chainId}] Failed to fetch block #${height}:`, err);
@@ -274,16 +247,32 @@ export class IngestionPipeline {
     }
   }
 
-  /** Safely serialize complex PAPI objects to plain JSON */
-  private safeSerialize(obj: unknown): Record<string, unknown> {
+  /**
+   * Resolve a block hash from a block number.
+   * Checks finalized and best blocks known to the PAPI client.
+   */
+  private async resolveBlockHash(height: number): Promise<string | null> {
     try {
-      return JSON.parse(
-        JSON.stringify(obj, (_key, value) =>
-          typeof value === "bigint" ? value.toString() : value
-        )
+      const { client } = this.papiClient;
+
+      const finalized = await client.getFinalizedBlock();
+      if (finalized.number === height) return finalized.hash;
+
+      // Search the best blocks array for the requested height
+      const bestBlocks = await client.getBestBlocks();
+      const match = bestBlocks.find((b) => b.number === height);
+      if (match) return match.hash;
+
+      // For deeper historical blocks, PAPI descriptors or a direct
+      // JSON-RPC chainHead call is needed. Log and skip for now.
+      console.warn(
+        `[Pipeline:${this.chainId}] Cannot resolve hash for block #${height}. ` +
+          `Generate PAPI descriptors for full historical backfill.`
       );
-    } catch {
-      return {};
+      return null;
+    } catch (err) {
+      console.error(`[Pipeline:${this.chainId}] resolveBlockHash(${height}) failed:`, err);
+      return null;
     }
   }
 
@@ -295,10 +284,5 @@ export class IngestionPipeline {
     } catch {
       return 0;
     }
-  }
-
-  private async getLastSpecVersion(): Promise<number> {
-    // In production, track this in the indexer state
-    return 0;
   }
 }

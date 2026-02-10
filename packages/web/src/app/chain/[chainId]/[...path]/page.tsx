@@ -1,4 +1,4 @@
-import chainConfigJson from "../../../../../chain-config.json";
+import { DEFAULT_CHAINS, type ChainConfig } from "@polka-xplo/shared";
 
 /**
  * Multi-Chain Route — /chain/[chainId]/[...path]
@@ -18,8 +18,8 @@ export default async function ChainPage({
 }) {
   const { chainId, path: pathSegments } = await params;
 
-  const chain = chainConfigJson.chains.find(
-    (c: { id: string }) => c.id === chainId
+  const chain: ChainConfig | undefined = DEFAULT_CHAINS.find(
+    (c) => c.id === chainId
   );
 
   if (!chain) {

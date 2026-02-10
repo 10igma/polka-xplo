@@ -5,11 +5,26 @@ import { createPool, closePool, query } from "./client.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
+function findMigrationsDir(): string {
+  // When run from dist/, look for src/migrations relative to the package root
+  const candidates = [
+    path.join(__dirname, "..", "src", "migrations"),  // dist/ → package root → src/migrations
+    path.join(__dirname, "migrations"),                // if migrations are alongside compiled output
+  ];
+  for (const dir of candidates) {
+    if (fs.existsSync(dir)) return dir;
+  }
+  throw new Error(
+    `Migrations directory not found. Searched: ${candidates.join(", ")}`
+  );
+}
+
 async function runMigrations(): Promise<void> {
   console.log("[DB] Running migrations...");
   createPool();
 
-  const migrationsDir = path.join(__dirname, "..", "src", "migrations");
+  const migrationsDir = findMigrationsDir();
+  console.log(`[DB] Using migrations from: ${migrationsDir}`);
   const files = fs
     .readdirSync(migrationsDir)
     .filter((f) => f.endsWith(".sql"))
