@@ -308,3 +308,35 @@ export interface IndexerStatusResponse {
 export async function getIndexerStatus(): Promise<IndexerStatusResponse> {
   return fetchJson("/api/indexer-status");
 }
+
+// ---- Runtime ----
+
+export interface SpecVersionInfo {
+  specVersion: number;
+  fromBlock: number;
+  toBlock: number;
+  blockCount: number;
+}
+
+export interface PalletSummary {
+  name: string;
+  index: number;
+  callCount: number;
+  eventCount: number;
+  storageCount: number;
+  constantCount: number;
+  errorCount: number;
+}
+
+export interface RuntimeSummary {
+  specVersion: number;
+  pallets: PalletSummary[];
+}
+
+export async function getSpecVersions(): Promise<{ versions: SpecVersionInfo[] }> {
+  return fetchJson("/api/runtime");
+}
+
+export async function getRuntimeModules(specVersion: number): Promise<RuntimeSummary> {
+  return fetchJson(`/api/runtime/${specVersion}`);
+}

@@ -24,9 +24,12 @@ import {
   getLatestTransfers,
   getTransfersList,
   getDatabaseSize,
+  getSpecVersions,
+  getBlockHashForSpecVersion,
 } from "@polka-xplo/db";
 import { detectSearchType, normalizeAddress } from "@polka-xplo/shared";
 import { metrics } from "../metrics.js";
+import { getRuntimeSummary } from "../runtime-parser.js";
 
 /**
  * The API server exposes indexed blockchain data to the frontend.
@@ -173,6 +176,73 @@ export function createApiServer(
       });
     } catch (err) {
       res.status(500).json({ error: "Failed to collect indexer status" });
+    }
+  });
+
+  /**
+   * @openapi
+   * /api/runtime:
+   *   get:
+   *     tags: [Runtime]
+   *     summary: List spec versions
+   *     description: Returns all indexed runtime spec versions with their block ranges.
+   *     responses:
+   *       200:
+   *         description: List of spec versions
+   */
+  app.get("/api/runtime", async (_req, res) => {
+    try {
+      const versions = await getSpecVersions();
+      res.json({ versions });
+    } catch (err) {
+      res.status(500).json({ error: "Failed to fetch spec versions" });
+    }
+  });
+
+  /**
+   * @openapi
+   * /api/runtime/{specVersion}:
+   *   get:
+   *     tags: [Runtime]
+   *     summary: Get runtime modules for a spec version
+   *     description: Returns pallet summaries (calls, events, storage, constants, errors) for a given spec version.
+   *     parameters:
+   *       - in: path
+   *         name: specVersion
+   *         required: true
+   *         schema:
+   *           type: integer
+   *         description: The spec version number
+   *     responses:
+   *       200:
+   *         description: Runtime module summaries
+   *       404:
+   *         description: Spec version not found
+   */
+  app.get("/api/runtime/:specVersion", async (req, res) => {
+    try {
+      const specVersion = parseInt(req.params.specVersion, 10);
+      if (isNaN(specVersion)) {
+        res.status(400).json({ error: "Invalid spec version" });
+        return;
+      }
+
+      const blockHash = await getBlockHashForSpecVersion(specVersion);
+      if (!blockHash) {
+        res.status(404).json({ error: `Spec version ${specVersion} not found in indexed blocks` });
+        return;
+      }
+
+      if (!rpcPool) {
+        res.status(503).json({ error: "RPC pool not available" });
+        return;
+      }
+
+      const summary = await getRuntimeSummary(rpcPool, blockHash, specVersion);
+      res.json(summary);
+    } catch (err) {
+      console.error("[API] Failed to fetch runtime metadata:", err);
+      res.status(500).json({ error: "Failed to fetch runtime metadata" });
     }
   });
 

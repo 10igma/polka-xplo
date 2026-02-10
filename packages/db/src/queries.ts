@@ -649,6 +649,38 @@ function mapEvent(row: Record<string, unknown>): ExplorerEvent {
 // Database Size / Table Stats
 // ============================================================
 
+/** Get all spec versions with their block ranges */
+export async function getSpecVersions(): Promise<
+  { specVersion: number; fromBlock: number; toBlock: number; blockCount: number }[]
+> {
+  const result = await query<{
+    spec_version: string;
+    from_block: string;
+    to_block: string;
+    block_count: string;
+  }>(
+    `SELECT spec_version, MIN(height) as from_block, MAX(height) as to_block, COUNT(*) as block_count
+     FROM blocks GROUP BY spec_version ORDER BY spec_version DESC`
+  );
+  return result.rows.map((r) => ({
+    specVersion: parseInt(r.spec_version, 10),
+    fromBlock: parseInt(r.from_block, 10),
+    toBlock: parseInt(r.to_block, 10),
+    blockCount: parseInt(r.block_count, 10),
+  }));
+}
+
+/** Get a block hash for a given spec version (to use for metadata lookup) */
+export async function getBlockHashForSpecVersion(
+  specVersion: number
+): Promise<string | null> {
+  const result = await query<{ hash: string }>(
+    `SELECT hash FROM blocks WHERE spec_version = $1 LIMIT 1`,
+    [specVersion]
+  );
+  return result.rows[0]?.hash ?? null;
+}
+
 export async function getDatabaseSize(): Promise<{
   totalSize: string;
   tables: { name: string; rows: number; size: string }[];
