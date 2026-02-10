@@ -1,6 +1,7 @@
 import { createRequire } from "node:module";
 import type { PapiClient } from "../client.js";
 import type { PluginRegistry } from "../plugins/registry.js";
+import { RpcPool } from "../rpc-pool.js";
 import { processBlock, type RawBlockData, type RawExtrinsic, type RawEvent } from "./block-processor.js";
 import { ExtrinsicDecoder } from "./extrinsic-decoder.js";
 import {
@@ -90,15 +91,17 @@ export class IngestionPipeline {
   private registry: PluginRegistry;
   private chainId: string;
   private decoder: ExtrinsicDecoder;
+  private rpcPool: RpcPool;
   private running = false;
   private finalizedUnsub: (() => void) | null = null;
   private bestUnsub: (() => void) | null = null;
 
-  constructor(papiClient: PapiClient, registry: PluginRegistry) {
+  constructor(papiClient: PapiClient, registry: PluginRegistry, rpcPool: RpcPool) {
     this.papiClient = papiClient;
     this.registry = registry;
     this.chainId = papiClient.chainConfig.id;
-    this.decoder = new ExtrinsicDecoder(papiClient.chainConfig.rpc[0]);
+    this.rpcPool = rpcPool;
+    this.decoder = new ExtrinsicDecoder(rpcPool);
   }
 
   /** Start the ingestion pipeline */
@@ -371,46 +374,30 @@ export class IngestionPipeline {
     height: number
   ): Promise<RawBlockData | null> {
     try {
-      const rpcUrl = this.papiClient.chainConfig.rpc[0];
-      const httpUrl = rpcUrl.replace(/^wss:\/\//, "https://").replace(/^ws:\/\//, "http://");
-
-      // 1. Resolve block hash
-      const hash = await this.rpcGetBlockHash(rpcUrl, height);
+      // 1. Resolve block hash via pool
+      const hash = await this.rpcPool.call<string>("chain_getBlockHash", [height]);
       if (!hash) return null;
 
-      // 2. Fetch the full block via chain_getBlock
-      const res = await fetch(httpUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          jsonrpc: "2.0",
-          id: 1,
-          method: "chain_getBlock",
-          params: [hash],
-        }),
-      });
-      const json = (await res.json()) as {
-        result?: {
-          block: {
-            header: {
-              parentHash: string;
-              number: string;
-              stateRoot: string;
-              extrinsicsRoot: string;
-              digest: { logs: string[] };
-            };
-            extrinsics: string[];
+      // 2. Fetch the full block via pool
+      const blockResult = await this.rpcPool.call<{
+        block: {
+          header: {
+            parentHash: string;
+            number: string;
+            stateRoot: string;
+            extrinsicsRoot: string;
+            digest: { logs: string[] };
           };
+          extrinsics: string[];
         };
-        error?: { code: number; message: string };
-      };
+      }>("chain_getBlock", [hash]);
 
-      if (!json.result?.block) {
+      if (!blockResult?.block) {
         console.warn(`[Pipeline:${this.chainId}] chain_getBlock returned no data for #${height}`);
         return null;
       }
 
-      const { header, extrinsics: rawExts } = json.result.block;
+      const { header, extrinsics: rawExts } = blockResult.block;
       const blockNumber = parseInt(header.number, 16);
 
       // Decode extrinsic call info using runtime metadata
@@ -475,32 +462,6 @@ export class IngestionPipeline {
       };
     } catch (err) {
       console.error(`[Pipeline:${this.chainId}] Legacy RPC failed for block #${height}:`, err);
-      return null;
-    }
-  }
-
-  /** Call chain_getBlockHash via direct JSON-RPC */
-  private async rpcGetBlockHash(rpcUrl: string, height: number): Promise<string | null> {
-    // Convert WSS URL to HTTPS for JSON-RPC calls
-    const httpUrl = rpcUrl.replace(/^wss:\/\//, "https://").replace(/^ws:\/\//, "http://");
-    try {
-      const res = await fetch(httpUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          jsonrpc: "2.0",
-          id: 1,
-          method: "chain_getBlockHash",
-          params: [height],
-        }),
-      });
-      const json = await res.json() as { result?: string; error?: unknown };
-      if (json.result && typeof json.result === "string") {
-        return json.result;
-      }
-      return null;
-    } catch (err) {
-      console.warn(`[Pipeline:${this.chainId}] RPC chain_getBlockHash(${height}) failed:`, err);
       return null;
     }
   }

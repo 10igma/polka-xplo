@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url";
 import swaggerJsdoc from "swagger-jsdoc";
 import swaggerUi from "swagger-ui-express";
 import type { PluginRegistry } from "../plugins/registry.js";
+import type { RpcPool } from "../rpc-pool.js";
 import {
   getLatestBlocks,
   getBlockByHeight,
@@ -31,7 +32,8 @@ import { detectSearchType, normalizeAddress } from "@polka-xplo/shared";
  */
 export function createApiServer(
   registry: PluginRegistry,
-  chainId: string
+  chainId: string,
+  rpcPool?: RpcPool
 ): express.Express {
   const app = express();
 
@@ -118,6 +120,28 @@ export function createApiServer(
         timestamp: Date.now(),
       });
     }
+  });
+
+  /**
+   * @openapi
+   * /api/rpc-health:
+   *   get:
+   *     tags: [System]
+   *     summary: RPC pool health
+   *     description: Returns health stats for all RPC endpoints in the pool.
+   *     responses:
+   *       200:
+   *         description: RPC pool stats
+   */
+  app.get("/api/rpc-health", (_req, res) => {
+    if (!rpcPool) {
+      res.json({ endpoints: [], message: "RPC pool not initialized" });
+      return;
+    }
+    res.json({
+      endpointCount: rpcPool.size,
+      endpoints: rpcPool.getStats(),
+    });
   });
 
   /**

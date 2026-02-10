@@ -5,7 +5,11 @@ export const DEFAULT_CHAINS: ChainConfig[] = [
   {
     id: "polkadot",
     name: "Polkadot",
-    rpc: ["wss://rpc.polkadot.io"],
+    rpc: [
+      "wss://rpc.polkadot.io",
+      "wss://polkadot-rpc.dwellir.com",
+      "wss://polkadot.public.curie.radiumblock.co/ws",
+    ],
     addressPrefix: 0,
     tokenSymbol: "DOT",
     tokenDecimals: 10,
@@ -15,7 +19,11 @@ export const DEFAULT_CHAINS: ChainConfig[] = [
   {
     id: "kusama",
     name: "Kusama",
-    rpc: ["wss://kusama-rpc.polkadot.io"],
+    rpc: [
+      "wss://kusama-rpc.polkadot.io",
+      "wss://kusama-rpc.dwellir.com",
+      "wss://kusama.public.curie.radiumblock.co/ws",
+    ],
     addressPrefix: 2,
     tokenSymbol: "KSM",
     tokenDecimals: 12,

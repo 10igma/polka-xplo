@@ -368,17 +368,17 @@ export interface DecodedEvent {
 
 // ── ExtrinsicDecoder ─────────────────────────────────────────────────────────
 
+import type { RpcPool } from "../rpc-pool.js";
+
 export class ExtrinsicDecoder {
-  private httpUrl: string;
+  private rpcPool: RpcPool;
   private metadataCache = new Map<number, PalletCallLookup>(); // specVersion → lookup
   private specVersionForBlock = new Map<string, number>(); // blockHash → specVersion
   /** In-flight metadata fetch promises keyed by specVersion — prevents duplicate fetches under concurrency */
   private metadataInflight = new Map<number, Promise<PalletCallLookup>>();
 
-  constructor(rpcUrl: string) {
-    this.httpUrl = rpcUrl
-      .replace(/^wss:\/\//, "https://")
-      .replace(/^ws:\/\//, "http://");
+  constructor(rpcPool: RpcPool) {
+    this.rpcPool = rpcPool;
   }
 
   // ── Public API ───────────────────────────────────────────────────────────
@@ -818,15 +818,6 @@ export class ExtrinsicDecoder {
   }
 
   private async rpcCall(method: string, params: unknown[]): Promise<any> {
-    const res = await fetch(this.httpUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
-    });
-    const json = (await res.json()) as { result?: unknown; error?: unknown };
-    if (json.error) {
-      throw new Error(`RPC ${method} failed: ${JSON.stringify(json.error)}`);
-    }
-    return json.result;
+    return this.rpcPool.call(method, params);
   }
 }
