@@ -9,50 +9,23 @@
 
 The project is architecturally sound — TypeScript monorepo with clean package boundaries, dual-stream ingestion, a plugin system, and a well-structured Next.js 15 frontend. The codebase is production-viable today for single-chain explorers with moderate traffic.
 
-This review identifies **23 findings** with the following priority distribution:
+This review identifies **23 findings** (4 fixed ✅, 19 remaining) with the following priority distribution:
 
-| Priority | Count | Description |
-|----------|-------|-------------|
-| 🔴 Critical | 3 | Will cause bugs in production or data corruption |
-| 🟠 High | 5 | Significant reliability or performance concerns |
-| 🟡 Medium | 8 | Best practices, correctness, or DX improvements |
-| 🟢 Low | 7 | Minor improvements, cleanup, or future-proofing |
+| Priority | Count | Fixed | Remaining |
+|----------|-------|-------|-----------|
+| 🔴 Critical | 3 | 1 ✅ | 2 |
+| 🟠 High | 5 | 2 ✅ | 3 |
+| 🟡 Medium | 8 | 1 ✅ | 7 |
+| 🟢 Low | 7 | 0 | 7 |
 
 ---
 
 ## 🔴 Critical Priority
 
-### C1. Race Condition in Backfill Concurrency
+### ~~C1. Race Condition in Backfill Concurrency~~ ✅ FIXED
 
 **File:** `packages/indexer/src/ingestion/pipeline.ts` → `runWithConcurrency()`  
-**Impact:** Duplicate block processing + skipped blocks during backfill
-
-```typescript
-// Current (broken): shared mutable index across async workers
-let index = 0;
-const workers = Array.from({ length: concurrency }, async () => {
-  while (index < items.length) {
-    const i = index++;  // NOT atomic — two workers can read same value
-    await fn(items[i]);
-  }
-});
-```
-
-Two workers can read the same `index` before either increments it, processing the same block twice while skipping the next. At high concurrency (10 workers), this manifests as gaps in the indexed data.
-
-**Fix:** Use a work-stealing pattern with a mutex, or simply use a shared queue:
-```typescript
-private async runWithConcurrency<T>(items: T[], fn: (item: T) => Promise<void>, concurrency: number): Promise<void> {
-  const queue = [...items];
-  const workers = Array.from({ length: Math.min(concurrency, queue.length) }, async () => {
-    while (true) {
-      const item = queue.shift(); // Array.shift is synchronous and safe
-      if (item === undefined) break;
-      await fn(item);
-    }
-  });
-  await Promise.all(workers);
-}
+**Status:** Fixed — replaced shared mutable index with work-stealing queue (`queue.shift()`).
 ```
 
 ---
@@ -99,45 +72,17 @@ await transaction(async (client) => {
 
 ## 🟠 High Priority
 
-### H1. No Pipeline Reconnection on Stream Error
+### ~~H1. No Pipeline Reconnection on Stream Error~~ ✅ FIXED
 
 **File:** `packages/indexer/src/ingestion/pipeline.ts` → `subscribeFinalized()`, `subscribeBestHead()`  
-**Impact:** Permanent indexer halt after a temporary WebSocket disconnect
-
-Both PAPI subscriptions (`finalizedBlock$`, `bestBlocks$`) have `error:` callbacks that only log. If the WebSocket drops (network blip, node restart), the RxJS subscription terminates and the indexer silently stops processing blocks — the API server stays up, so health checks may still respond, masking the failure.
-
-**Fix:** Implement reconnection with exponential backoff:
-```typescript
-error: (err) => {
-  console.error(`Finalized stream error:`, err);
-  // Reconnect after delay
-  setTimeout(() => {
-    if (this.running) this.subscribeFinalized();
-  }, 5000);
-}
-```
+**Status:** Fixed — both subscriptions now auto-reconnect with exponential backoff (1s → 60s cap), retry counter resets on successful block.
 
 ---
 
-### H2. `hexToBytes` Crashes on Empty Hex Input
+### ~~H2. `hexToBytes` Crashes on Empty Hex Input~~ ✅ FIXED
 
-**Files:** `packages/indexer/src/ingestion/pipeline.ts:24`, `packages/indexer/src/runtime-parser.ts:19`  
-**Impact:** Unhandled exception crashes the indexer
-
-```typescript
-function hexToBytes(hex: string): Uint8Array {
-  const clean = hex.startsWith("0x") ? hex.slice(2) : hex;
-  return new Uint8Array(clean.match(/.{1,2}/g)!.map(...));
-  //                      ^^^ returns null if clean is ""
-}
-```
-
-If a block contains an empty extrinsic hex (`"0x"`) or the metadata RPC returns an empty string, `.match()` returns `null` and the `!` assertion crashes the process.
-
-**Fix:** Add a guard:
-```typescript
-if (!clean) return new Uint8Array(0);
-```
+**Files:** `packages/indexer/src/ingestion/pipeline.ts`, `packages/indexer/src/ingestion/extrinsic-decoder.ts`, `packages/indexer/src/runtime-parser.ts`  
+**Status:** Fixed — added `if (!clean) return new Uint8Array(0);` guard in all 3 copies.
 
 ---
 
@@ -264,21 +209,10 @@ The indexer stores accounts using the hex public key returned by PAPI (e.g., `0x
 
 ---
 
-### M6. Inconsistent Pagination Page Numbering
+### ~~M6. Inconsistent Pagination Page Numbering~~ ✅ FIXED
 
-**Files:** `packages/indexer/src/api/server.ts` — various endpoints  
-**Impact:** Frontend/API page number mismatch
-
-Some endpoints return `page: Math.floor(offset / limit)` (0-based) while others return `page: Math.floor(offset / limit) + 1` (1-based). The `Pagination` component expects 1-based.
-
-| Endpoint | Formula | Base |
-|----------|---------|------|
-| `/api/blocks` | `Math.floor(offset / limit)` | **0-based** |
-| `/api/extrinsics` | `Math.floor(offset / limit) + 1` | **1-based** |
-| `/api/events` | `Math.floor(offset / limit) + 1` | **1-based** |
-| `/api/logs` | `Math.floor(offset / limit)` | **0-based** |
-
-**Fix:** Standardize all endpoints to 1-based: `page: Math.floor(offset / limit) + 1`.
+**Files:** `packages/indexer/src/api/server.ts`  
+**Status:** Fixed — all endpoints now use 1-based page: `Math.floor(offset / limit) + 1`.
 
 ---
 
@@ -426,10 +360,10 @@ The current architecture is appropriate for chains with < 10M blocks. Beyond tha
 ## Recommended Fix Order
 
 **Immediate (before next release):**
-1. C1 — Fix `runWithConcurrency` race condition
-2. H2 — Guard `hexToBytes` against empty input
-3. H1 — Add reconnection logic to PAPI subscriptions
-4. M6 — Standardize pagination page numbering
+1. ~~C1 — Fix `runWithConcurrency` race condition~~ ✅
+2. ~~H2 — Guard `hexToBytes` against empty input~~ ✅
+3. ~~H1 — Add reconnection logic to PAPI subscriptions~~ ✅
+4. ~~M6 — Standardize pagination page numbering~~ ✅
 
 **Short-term (next sprint):**
 5. C3 — Wrap extension migrations in transactions

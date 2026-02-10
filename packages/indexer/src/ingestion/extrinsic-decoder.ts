@@ -28,6 +28,7 @@ const { getLookupFn } = require("@polkadot-api/metadata-builders") as {
 
 function hexToBytes(hex: string): Uint8Array {
   const clean = hex.startsWith("0x") ? hex.slice(2) : hex;
+  if (!clean) return new Uint8Array(0);
   return new Uint8Array(
     clean.match(/.{1,2}/g)!.map((b) => parseInt(b, 16))
   );

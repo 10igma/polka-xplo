@@ -305,7 +305,7 @@ export function createApiServer(
       res.json({
         data: result.blocks,
         total: result.total,
-        page: Math.floor(offset / limit),
+        page: Math.floor(offset / limit) + 1,
         pageSize: limit,
         hasMore: offset + limit < result.total,
       });
@@ -773,7 +773,7 @@ export function createApiServer(
       res.json({
         data: result.data,
         total: result.total,
-        page: Math.floor(offset / limit),
+        page: Math.floor(offset / limit) + 1,
         pageSize: limit,
         hasMore: offset + limit < result.total,
       });

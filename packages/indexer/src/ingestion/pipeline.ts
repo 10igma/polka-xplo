@@ -20,6 +20,7 @@ const { Blake2256 } = require2("@polkadot-api/substrate-bindings") as {
 
 function hexToBytes(hex: string): Uint8Array {
   const clean = hex.startsWith("0x") ? hex.slice(2) : hex;
+  if (!clean) return new Uint8Array(0);
   return new Uint8Array(clean.match(/.{1,2}/g)!.map((b) => parseInt(b, 16)));
 }
 
@@ -183,8 +184,8 @@ export class IngestionPipeline {
     console.log(`[Pipeline:${this.chainId}] Backfill complete.`);
   }
 
-  /** Subscribe to the finalized block stream */
-  private subscribeFinalized(): void {
+  /** Subscribe to the finalized block stream (with auto-reconnect) */
+  private subscribeFinalized(retryCount = 0): void {
     const { client } = this.papiClient;
 
     const sub = client.finalizedBlock$.subscribe({
@@ -196,6 +197,7 @@ export class IngestionPipeline {
           await finalizeBlock(block.number);
           await upsertIndexerState(this.chainId, block.number, block.number, "live");
           metrics.setChainTip(block.number);
+          retryCount = 0; // reset backoff on successful block
         } catch (err) {
           metrics.recordError();
           console.error(`[Pipeline:${this.chainId}] Error processing finalized block:`, err);
@@ -203,14 +205,21 @@ export class IngestionPipeline {
       },
       error: (err) => {
         console.error(`[Pipeline:${this.chainId}] Finalized stream error:`, err);
+        if (this.running) {
+          const delay = Math.min(1000 * 2 ** retryCount, 60_000);
+          console.log(`[Pipeline:${this.chainId}] Reconnecting finalized stream in ${delay}ms (attempt ${retryCount + 1})...`);
+          setTimeout(() => {
+            if (this.running) this.subscribeFinalized(retryCount + 1);
+          }, delay);
+        }
       },
     });
 
     this.finalizedUnsub = () => sub.unsubscribe();
   }
 
-  /** Subscribe to the best (unfinalized) block stream */
-  private subscribeBestHead(): void {
+  /** Subscribe to the best (unfinalized) block stream (with auto-reconnect) */
+  private subscribeBestHead(retryCount = 0): void {
     const { client } = this.papiClient;
 
     const sub = client.bestBlocks$.subscribe({
@@ -222,6 +231,7 @@ export class IngestionPipeline {
 
           console.log(`[Pipeline:${this.chainId}] Best block #${latest.number}`);
           await this.fetchAndProcessByHash(latest.hash, latest.number, "best");
+          retryCount = 0; // reset backoff on successful block
         } catch (err) {
           metrics.recordError();
           console.error(`[Pipeline:${this.chainId}] Error processing best block:`, err);
@@ -229,6 +239,13 @@ export class IngestionPipeline {
       },
       error: (err) => {
         console.error(`[Pipeline:${this.chainId}] Best stream error:`, err);
+        if (this.running) {
+          const delay = Math.min(1000 * 2 ** retryCount, 60_000);
+          console.log(`[Pipeline:${this.chainId}] Reconnecting best stream in ${delay}ms (attempt ${retryCount + 1})...`);
+          setTimeout(() => {
+            if (this.running) this.subscribeBestHead(retryCount + 1);
+          }, delay);
+        }
       },
     });
 
@@ -476,17 +493,18 @@ export class IngestionPipeline {
     }
   }
 
-  /** Run tasks with bounded concurrency */
+  /** Run tasks with bounded concurrency (work-stealing queue pattern) */
   private async runWithConcurrency<T>(
     items: T[],
     fn: (item: T) => Promise<void>,
     concurrency: number
   ): Promise<void> {
-    let index = 0;
-    const workers = Array.from({ length: Math.min(concurrency, items.length) }, async () => {
-      while (index < items.length) {
-        const i = index++;
-        await fn(items[i]);
+    const queue = [...items];
+    const workers = Array.from({ length: Math.min(concurrency, queue.length) }, async () => {
+      while (true) {
+        const item = queue.shift(); // synchronous — safe across async workers
+        if (item === undefined) break;
+        await fn(item);
       }
     });
     await Promise.all(workers);
