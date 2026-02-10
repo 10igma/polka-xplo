@@ -67,7 +67,7 @@ export default async function HomePage() {
               Latest Blocks
             </h2>
             <a
-              href="/block/latest"
+              href="/blocks"
               className="text-xs text-accent hover:underline"
             >
               View All
@@ -84,6 +84,12 @@ export default async function HomePage() {
             <h2 className="text-lg font-semibold text-zinc-100">
               Signed Transfers
             </h2>
+            <a
+              href="/transfers"
+              className="text-xs text-accent hover:underline"
+            >
+              View All
+            </a>
           </div>
           <div className="card">
             <LatestTransfersCard
