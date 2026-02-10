@@ -16,9 +16,7 @@ function toCamelCase(s: string): string {
  */
 export function EventList({ events }: { events: EventSummary[] }) {
   if (events.length === 0) {
-    return (
-      <div className="text-center py-8 text-zinc-500">No events found.</div>
-    );
+    return <div className="text-center py-8 text-zinc-500">No events found.</div>;
   }
 
   return (
@@ -44,24 +42,15 @@ export function EventList({ events }: { events: EventSummary[] }) {
 
 function EventRow({ event }: { event: EventSummary }) {
   const [expanded, setExpanded] = React.useState(false);
-  const hasData =
-    event.data && Object.keys(event.data).length > 0;
+  const hasData = event.data && Object.keys(event.data).length > 0;
 
   return (
     <>
-      <tr
-        className="table-row cursor-pointer"
-        onClick={() => hasData && setExpanded(!expanded)}
-      >
-        <td className="py-2.5 pr-4 font-mono text-xs text-zinc-400">
-          {event.id}
-        </td>
+      <tr className="table-row cursor-pointer" onClick={() => hasData && setExpanded(!expanded)}>
+        <td className="py-2.5 pr-4 font-mono text-xs text-zinc-400">{event.id}</td>
         <td className="py-2.5 pr-4 font-mono text-xs">
           {event.extrinsicId ? (
-            <a
-              href={`/extrinsic/${event.extrinsicId}`}
-              className="text-accent hover:underline"
-            >
+            <a href={`/extrinsic/${event.extrinsicId}`} className="text-accent hover:underline">
               {event.extrinsicId}
             </a>
           ) : (

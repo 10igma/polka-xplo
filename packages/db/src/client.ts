@@ -36,16 +36,14 @@ export function getPool(): DbPool {
 /** Run a query with automatic client checkout */
 export async function query<T extends pg.QueryResultRow = Record<string, unknown>>(
   text: string,
-  params?: unknown[]
+  params?: unknown[],
 ): Promise<pg.QueryResult<T>> {
   const p = getPool();
   return p.query<T>(text, params);
 }
 
 /** Run multiple queries in a transaction */
-export async function transaction<T>(
-  fn: (client: DbClient) => Promise<T>
-): Promise<T> {
+export async function transaction<T>(fn: (client: DbClient) => Promise<T>): Promise<T> {
   const p = getPool();
   const client = await p.connect();
   try {

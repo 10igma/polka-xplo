@@ -6,7 +6,7 @@
   "main": "./dist/indexer/event-handlers.js",
   "scripts": {
     "build": "tsc",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit && eslint ."
   },
   "dependencies": {
     "@polka-xplo/shared": "*",

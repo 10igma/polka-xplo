@@ -82,9 +82,7 @@ function TabButton({
       {label}
       <span
         className={`inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-xs font-medium ${
-          isActive
-            ? "bg-zinc-700 text-zinc-200"
-            : "bg-zinc-800 text-zinc-500"
+          isActive ? "bg-zinc-700 text-zinc-200" : "bg-zinc-800 text-zinc-500"
         }`}
       >
         {count}

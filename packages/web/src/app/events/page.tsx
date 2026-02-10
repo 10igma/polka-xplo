@@ -2,6 +2,8 @@ import { getEvents, type EventsResponse } from "@/lib/api";
 import { EventsTable } from "@/components/EventsTable";
 import { Pagination } from "@/components/Pagination";
 
+export const dynamic = "force-dynamic";
+
 /**
  * Events list page — paginated table of all events, with optional module filter.
  */
@@ -30,13 +32,9 @@ export default async function EventsPage({
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-2">
-        <h1 className="text-xl font-bold text-zinc-100">
-          Events{module ? `: ${module}` : ""}
-        </h1>
+        <h1 className="text-xl font-bold text-zinc-100">Events{module ? `: ${module}` : ""}</h1>
         {events && (
-          <span className="text-sm text-zinc-400">
-            {events.total.toLocaleString()} total
-          </span>
+          <span className="text-sm text-zinc-400">{events.total.toLocaleString()} total</span>
         )}
       </div>
 
@@ -46,28 +44,24 @@ export default async function EventsPage({
         <a
           href="/events"
           className={`px-2 py-1 rounded text-xs transition-colors ${
-            !module
-              ? "bg-accent/20 text-accent"
-              : "bg-zinc-800 text-zinc-400 hover:text-zinc-200"
+            !module ? "bg-accent/20 text-accent" : "bg-zinc-800 text-zinc-400 hover:text-zinc-200"
           }`}
         >
           All
         </a>
-        {["System", "Balances", "TransactionPayment", "Staking", "Session", "Treasury"].map(
-          (m) => (
-            <a
-              key={m}
-              href={`/events?module=${m}`}
-              className={`px-2 py-1 rounded text-xs transition-colors ${
-                module === m
-                  ? "bg-accent/20 text-accent"
-                  : "bg-zinc-800 text-zinc-400 hover:text-zinc-200"
-              }`}
-            >
-              {m}
-            </a>
-          )
-        )}
+        {["System", "Balances", "TransactionPayment", "Staking", "Session", "Treasury"].map((m) => (
+          <a
+            key={m}
+            href={`/events?module=${m}`}
+            className={`px-2 py-1 rounded text-xs transition-colors ${
+              module === m
+                ? "bg-accent/20 text-accent"
+                : "bg-zinc-800 text-zinc-400 hover:text-zinc-200"
+            }`}
+          >
+            {m}
+          </a>
+        ))}
       </div>
 
       {error && (

@@ -43,30 +43,19 @@ export function BlocksTable({ blocks }: { blocks: BlockSummary[] }) {
               <td className="py-2.5 pr-4">
                 <StatusBadge status={block.status} />
               </td>
-              <td className="py-2.5 pr-4 text-zinc-400">
-                {timeAgo(block.timestamp)}
-              </td>
-              <td className="py-2.5 pr-4 text-right text-zinc-300">
-                {block.extrinsicCount}
-              </td>
-              <td className="py-2.5 pr-4 text-right text-zinc-300">
-                {block.eventCount}
-              </td>
+              <td className="py-2.5 pr-4 text-zinc-400">{timeAgo(block.timestamp)}</td>
+              <td className="py-2.5 pr-4 text-right text-zinc-300">{block.extrinsicCount}</td>
+              <td className="py-2.5 pr-4 text-right text-zinc-300">{block.eventCount}</td>
               <td className="py-2.5 pr-4 font-mono text-xs">
                 {block.validatorId ? (
-                  <a
-                    href={`/account/${block.validatorId}`}
-                    className="text-accent hover:underline"
-                  >
+                  <a href={`/account/${block.validatorId}`} className="text-accent hover:underline">
                     {truncateHash(block.validatorId)}
                   </a>
                 ) : (
                   <span className="text-zinc-600">—</span>
                 )}
               </td>
-              <td className="py-2.5 font-mono text-xs text-zinc-400">
-                {truncateHash(block.hash)}
-              </td>
+              <td className="py-2.5 font-mono text-xs text-zinc-400">{truncateHash(block.hash)}</td>
             </tr>
           ))}
         </tbody>
@@ -80,9 +69,7 @@ function StatusBadge({ status }: { status: string }) {
   return (
     <span
       className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${
-        isFinalized
-          ? "bg-green-900/40 text-green-400"
-          : "bg-yellow-900/40 text-yellow-400"
+        isFinalized ? "bg-green-900/40 text-green-400" : "bg-yellow-900/40 text-yellow-400"
       }`}
     >
       {isFinalized ? "Finalized" : "Best"}

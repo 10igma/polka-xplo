@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 /**
  * Chain State Browser — Generic State Map Viewer
  *
@@ -40,10 +42,9 @@ export default async function ChainStatePage({
             storage map using PAPI&apos;s metadata introspection.
           </p>
           <p className="text-zinc-500 text-xs">
-            When connected to a live node, PAPI discovers the key and value
-            types from the runtime metadata and renders them automatically.
-            This allows tracking &quot;things&quot; (Assets, NFTs, Staking state)
-            without writing custom code for each pallet.
+            When connected to a live node, PAPI discovers the key and value types from the runtime
+            metadata and renders them automatically. This allows tracking &quot;things&quot;
+            (Assets, NFTs, Staking state) without writing custom code for each pallet.
           </p>
         </div>
       </div>
@@ -51,7 +52,9 @@ export default async function ChainStatePage({
       {/* Placeholder for dynamic state entries */}
       <div className="card">
         <div className="text-center py-12 text-zinc-500">
-          <p>Connect to a live node to browse {pallet}.{storage} entries.</p>
+          <p>
+            Connect to a live node to browse {pallet}.{storage} entries.
+          </p>
           <p className="text-xs mt-2">
             The state browser will render table headers and rows from PAPI metadata.
           </p>

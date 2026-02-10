@@ -99,18 +99,12 @@ class IndexerMetrics {
     const oneMinuteAgo = now - 60_000;
     const oneHourAgo = now - 3_600_000;
 
-    const blocksPerMinute = this.blockTimestamps.filter(
-      (t) => t >= oneMinuteAgo
-    ).length;
-    const blocksPerHour = this.blockTimestamps.filter(
-      (t) => t >= oneHourAgo
-    ).length;
+    const blocksPerMinute = this.blockTimestamps.filter((t) => t >= oneMinuteAgo).length;
+    const blocksPerHour = this.blockTimestamps.filter((t) => t >= oneHourAgo).length;
 
     const blocksRemaining = Math.max(0, this.chainTip - this.indexedHeight);
     const syncPercent =
-      this.chainTip > 0
-        ? Math.min(100, (this.indexedHeight / this.chainTip) * 100)
-        : 0;
+      this.chainTip > 0 ? Math.min(100, (this.indexedHeight / this.chainTip) * 100) : 0;
 
     // ETA: use blocks/minute rate (more responsive than hourly)
     let etaSeconds: number | null = null;

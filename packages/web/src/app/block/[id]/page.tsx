@@ -3,23 +3,16 @@ import { ExtrinsicList } from "@/components/ExtrinsicList";
 import { EventList } from "@/components/EventList";
 import { LogList } from "@/components/LogList";
 import { BlockDetailTabs } from "@/components/BlockDetailTabs";
-import {
-  truncateHash,
-  formatNumber,
-  formatDate,
-  timeAgo,
-} from "@/lib/format";
+import { truncateHash, formatNumber, formatDate, timeAgo } from "@/lib/format";
+
+export const dynamic = "force-dynamic";
 
 /**
  * Block Detail Page — Server Component
  * Renders block header, extrinsics table, and event list.
  * Immutable finalized blocks are effectively static and highly cacheable.
  */
-export default async function BlockPage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
+export default async function BlockPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   let data;
 
@@ -27,9 +20,7 @@ export default async function BlockPage({
     data = await getBlock(id);
   } catch {
     return (
-      <div className="text-center py-20 text-zinc-500">
-        Block not found or indexer unavailable.
-      </div>
+      <div className="text-center py-20 text-zinc-500">Block not found or indexer unavailable.</div>
     );
   }
 
@@ -40,14 +31,8 @@ export default async function BlockPage({
     <div className="space-y-6">
       {/* Block Header */}
       <div className="flex items-center gap-3">
-        <h1 className="text-xl font-bold text-zinc-100">
-          Block #{formatNumber(block.height)}
-        </h1>
-        <span
-          className={
-            block.status === "finalized" ? "badge-success" : "badge-info"
-          }
-        >
+        <h1 className="text-xl font-bold text-zinc-100">Block #{formatNumber(block.height)}</h1>
+        <span className={block.status === "finalized" ? "badge-success" : "badge-info"}>
           {block.status}
         </span>
       </div>
@@ -55,30 +40,22 @@ export default async function BlockPage({
       {/* Block Details Card */}
       <div className="card space-y-3">
         <DetailRow label="Block Hash" value={block.hash} mono />
-        <DetailRow label="Parent Hash" value={block.parentHash} mono href={`/block/${block.height - 1}`} />
-        <DetailRow label="State Root" value={truncateHash(block.stateRoot, 10)} mono />
         <DetailRow
-          label="Extrinsics Root"
-          value={truncateHash(block.extrinsicsRoot, 10)}
+          label="Parent Hash"
+          value={block.parentHash}
           mono
+          href={`/block/${block.height - 1}`}
         />
+        <DetailRow label="State Root" value={truncateHash(block.stateRoot, 10)} mono />
+        <DetailRow label="Extrinsics Root" value={truncateHash(block.extrinsicsRoot, 10)} mono />
         <DetailRow
           label="Timestamp"
           value={
-            block.timestamp
-              ? `${formatDate(block.timestamp)} (${timeAgo(block.timestamp)})`
-              : "—"
+            block.timestamp ? `${formatDate(block.timestamp)} (${timeAgo(block.timestamp)})` : "—"
           }
         />
-        <DetailRow
-          label="Spec Version"
-          value={String(block.specVersion)}
-        />
-        <DetailRow
-          label="Validator"
-          value={block.validatorId ?? "—"}
-          mono
-        />
+        <DetailRow label="Spec Version" value={String(block.specVersion)} />
+        <DetailRow label="Validator" value={block.validatorId ?? "—"} mono />
       </div>
 
       {/* Tabbed: Extrinsics / Events / Logs */}
@@ -128,9 +105,7 @@ function DetailRow({
           {value}
         </a>
       ) : (
-        <span
-          className={`text-sm text-zinc-200 break-all ${mono ? "font-mono" : ""}`}
-        >
+        <span className={`text-sm text-zinc-200 break-all ${mono ? "font-mono" : ""}`}>
           {value}
         </span>
       )}

@@ -20,9 +20,7 @@ export default function RewardViewer({ data }: { data: RewardData }) {
     <div className="rounded-lg border border-green-700/30 bg-green-950/20 p-4">
       <div className="flex items-center gap-2 mb-2">
         <span className="inline-block w-2 h-2 rounded-full bg-green-400" />
-        <span className="text-sm font-medium text-green-400">
-          Staking Reward
-        </span>
+        <span className="text-sm font-medium text-green-400">Staking Reward</span>
       </div>
       <div className="space-y-1">
         <div className="flex justify-between text-sm">

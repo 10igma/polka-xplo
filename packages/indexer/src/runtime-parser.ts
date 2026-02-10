@@ -7,16 +7,12 @@
 
 import { createRequire } from "node:module";
 import type { RpcPool } from "./rpc-pool.js";
+import { hexToBytes } from "./hex-utils.js";
 
 const require2 = createRequire(import.meta.url);
 const { decAnyMetadata } = require2("@polkadot-api/substrate-bindings") as {
   decAnyMetadata: (bytes: Uint8Array) => { metadata: { tag: string; value: any } };
 };
-
-function hexToBytes(hex: string): Uint8Array {
-  const clean = hex.startsWith("0x") ? hex.slice(2) : hex;
-  return new Uint8Array(clean.match(/.{1,2}/g)!.map((b) => parseInt(b, 16)));
-}
 
 export interface PalletSummary {
   name: string;
@@ -42,7 +38,7 @@ const runtimeCache = new Map<number, RuntimeSummary>();
  */
 function countVariants(
   typeId: number | undefined | null,
-  rawTypes: Map<number, { tag: string; value: any }>
+  rawTypes: Map<number, { tag: string; value: any }>,
 ): number {
   if (typeId == null) return 0;
   const entry = rawTypes.get(typeId);
@@ -54,9 +50,7 @@ function countVariants(
  * Count storage items from a pallet's storage definition.
  * The storage field is an object with an `items` array.
  */
-function countStorage(
-  storage: { items: Array<unknown> } | undefined | null
-): number {
+function countStorage(storage: { items: Array<unknown> } | undefined | null): number {
   if (!storage?.items) return 0;
   return storage.items.length;
 }
@@ -64,9 +58,7 @@ function countStorage(
 /**
  * Count constants from a pallet's constants array.
  */
-function countConstants(
-  constants: Array<unknown> | undefined | null
-): number {
+function countConstants(constants: Array<unknown> | undefined | null): number {
   if (!constants) return 0;
   return constants.length;
 }
@@ -78,7 +70,7 @@ function countConstants(
 export async function getRuntimeSummary(
   rpcPool: RpcPool,
   blockHash: string,
-  specVersion: number
+  specVersion: number,
 ): Promise<RuntimeSummary> {
   // Check cache
   const cached = runtimeCache.get(specVersion);

@@ -1,8 +1,10 @@
 import { getAccount } from "@/lib/api";
 import { ExtrinsicList } from "@/components/ExtrinsicList";
 import { AddressDisplay } from "@/components/AddressDisplay";
-import { formatNumber, formatBalance } from "@/lib/format";
+import { formatBalance } from "@/lib/format";
 import { theme } from "@/lib/theme";
+
+export const dynamic = "force-dynamic";
 
 /**
  * Account Detail Page — Server Component
@@ -10,11 +12,7 @@ import { theme } from "@/lib/theme";
  * and tabbed transaction history. Addresses display in SS58 format
  * using the client-side prefix selector.
  */
-export default async function AccountPage({
-  params,
-}: {
-  params: Promise<{ address: string }>;
-}) {
+export default async function AccountPage({ params }: { params: Promise<{ address: string }> }) {
   const { address } = await params;
   let data;
 
@@ -47,16 +45,23 @@ export default async function AccountPage({
       <div className="flex items-center gap-3">
         {/* Identicon placeholder */}
         <div className="w-10 h-10 rounded-full bg-gradient-to-br from-accent to-polkadot-purple flex items-center justify-center text-white text-sm font-bold shrink-0">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+          <svg
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
             <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" />
             <circle cx="12" cy="7" r="4" />
           </svg>
         </div>
         <div className="min-w-0">
           {account.identity?.display && (
-            <h1 className="text-lg font-bold text-zinc-100">
-              {account.identity.display}
-            </h1>
+            <h1 className="text-lg font-bold text-zinc-100">{account.identity.display}</h1>
           )}
         </div>
       </div>
@@ -86,12 +91,7 @@ export default async function AccountPage({
           decimals={decimals}
           symbol={symbol}
         />
-        <BalanceRow
-          label="Locked"
-          value={frozen.toString()}
-          decimals={decimals}
-          symbol={symbol}
-        />
+        <BalanceRow label="Locked" value={frozen.toString()} decimals={decimals} symbol={symbol} />
         <BalanceRow
           label="Reserved"
           value={reserved.toString()}
@@ -118,13 +118,7 @@ export default async function AccountPage({
   );
 }
 
-function DetailRow({
-  label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
+function DetailRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-4">
       <span className="text-xs text-zinc-500 sm:w-32 shrink-0">{label}</span>

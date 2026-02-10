@@ -12,6 +12,7 @@
  */
 
 import { createRequire } from "node:module";
+import { hexToBytes, bytesToHex } from "../hex-utils.js";
 
 // Import PAPI transitive dependencies using createRequire since ESM
 // module resolution with "bundler" moduleResolution may not resolve
@@ -25,19 +26,6 @@ const { getLookupFn } = require("@polkadot-api/metadata-builders") as {
 };
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
-
-function hexToBytes(hex: string): Uint8Array {
-  const clean = hex.startsWith("0x") ? hex.slice(2) : hex;
-  return new Uint8Array(
-    clean.match(/.{1,2}/g)!.map((b) => parseInt(b, 16))
-  );
-}
-
-function bytesToHex(bytes: Uint8Array): string {
-  return Array.from(bytes)
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
-}
 
 interface CompactResult {
   value: number;
@@ -53,10 +41,7 @@ function readCompact(bytes: Uint8Array, offset: number): CompactResult {
   }
   if (mode === 2) {
     const val =
-      (first >> 2) |
-      (bytes[offset] << 6) |
-      (bytes[offset + 1] << 14) |
-      (bytes[offset + 2] << 22);
+      (first >> 2) | (bytes[offset] << 6) | (bytes[offset + 1] << 14) | (bytes[offset + 2] << 22);
     return { value: val, offset: offset + 3 };
   }
   // Big integer mode
@@ -126,8 +111,7 @@ const SIGNED_EXTENSION_PARSERS: Record<string, ExtensionParser> = {
 // ── Event Storage ─────────────────────────────────────────────────────────────
 
 /** Well-known storage key: twox128("System") ++ twox128("Events") */
-const SYSTEM_EVENTS_KEY =
-  "0x26aa394eea5630e07c48ae0c9558cef780d41e5e16056765bc8461851072c9d7";
+const SYSTEM_EVENTS_KEY = "0x26aa394eea5630e07c48ae0c9558cef780d41e5e16056765bc8461851072c9d7";
 
 // ── SCALE Type Traversal ─────────────────────────────────────────────────────
 
@@ -137,7 +121,7 @@ function skipScaleType(
   offset: number,
   typeId: number,
   registry: Map<number, { tag: string; value: any }>,
-  depth = 0
+  depth = 0,
 ): number {
   if (depth > 64) throw new Error("Type traversal exceeded depth limit");
 
@@ -225,7 +209,7 @@ function readScaleValue(
   startOffset: number,
   typeId: number,
   registry: Map<number, { tag: string; value: any }>,
-  depth = 0
+  depth = 0,
 ): { value: unknown; offset: number } {
   if (depth > 16) {
     const end = skipScaleType(bytes, startOffset, typeId, registry, depth);
@@ -241,10 +225,19 @@ function readScaleValue(
         const p = (typeDef.value as { tag: string }).tag;
         if (p === "bool") return { value: bytes[startOffset] !== 0, offset: startOffset + 1 };
         if (p === "u8") return { value: bytes[startOffset], offset: startOffset + 1 };
-        if (p === "u16") return { value: bytes[startOffset] | (bytes[startOffset + 1] << 8), offset: startOffset + 2 };
+        if (p === "u16")
+          return {
+            value: bytes[startOffset] | (bytes[startOffset + 1] << 8),
+            offset: startOffset + 2,
+          };
         if (p === "u32")
           return {
-            value: ((bytes[startOffset] | (bytes[startOffset + 1] << 8) | (bytes[startOffset + 2] << 16) | (bytes[startOffset + 3] << 24)) >>> 0),
+            value:
+              (bytes[startOffset] |
+                (bytes[startOffset + 1] << 8) |
+                (bytes[startOffset + 2] << 16) |
+                (bytes[startOffset + 3] << 24)) >>>
+              0,
             offset: startOffset + 4,
           };
         if (p === "u64") {
@@ -265,7 +258,10 @@ function readScaleValue(
         const { len, type: elemType } = typeDef.value as { len: number; type: number };
         const elemDef = registry.get(elemType);
         if (elemDef?.tag === "primitive" && (elemDef.value as { tag: string }).tag === "u8") {
-          return { value: "0x" + bytesToHex(bytes.slice(startOffset, startOffset + len)), offset: startOffset + len };
+          return {
+            value: "0x" + bytesToHex(bytes.slice(startOffset, startOffset + len)),
+            offset: startOffset + len,
+          };
         }
         break;
       }
@@ -390,7 +386,9 @@ export class ExtrinsicDecoder {
    * Uses promise-based deduplication so that concurrent backfill workers
    * requesting the same specVersion share a single in-flight fetch.
    */
-  async ensureMetadata(blockHash: string): Promise<{ lookup: PalletCallLookup; specVersion: number }> {
+  async ensureMetadata(
+    blockHash: string,
+  ): Promise<{ lookup: PalletCallLookup; specVersion: number }> {
     let specVersion = this.specVersionForBlock.get(blockHash);
 
     if (specVersion === undefined) {
@@ -407,9 +405,7 @@ export class ExtrinsicDecoder {
     if (inflight) return { lookup: await inflight, specVersion };
 
     // Start a new fetch and store the promise for dedup
-    console.log(
-      `[ExtrinsicDecoder] Fetching metadata for specVersion ${specVersion}`
-    );
+    console.log(`[ExtrinsicDecoder] Fetching metadata for specVersion ${specVersion}`);
     const promise = this.fetchAndDecodeMetadata(blockHash).then((lookup) => {
       this.metadataCache.set(specVersion!, lookup);
       this.metadataInflight.delete(specVersion!);
@@ -424,7 +420,11 @@ export class ExtrinsicDecoder {
    * nonce, tip) from a single raw extrinsic hex string.
    */
   decodeCallInfo(hex: string, lookup: PalletCallLookup): DecodedCallInfo {
-    const fallback = (mod = "Unknown", call = "unknown", signer: string | null = null): DecodedCallInfo => ({
+    const fallback = (
+      mod = "Unknown",
+      call = "unknown",
+      signer: string | null = null,
+    ): DecodedCallInfo => ({
       module: mod,
       call,
       signer,
@@ -535,11 +535,7 @@ export class ExtrinsicDecoder {
    * Returns the Unix timestamp in milliseconds, or null if the extrinsic
    * is not a Timestamp.set call.
    */
-  extractTimestamp(
-    hex: string,
-    module: string,
-    call: string
-  ): number | null {
+  extractTimestamp(hex: string, module: string, call: string): number | null {
     if (module !== "Timestamp" || call !== "set") return null;
 
     try {
@@ -560,15 +556,12 @@ export class ExtrinsicDecoder {
    * Decode all events from a block by reading System.Events storage.
    * Returns an array matching the RawEvent interface from block-processor.
    */
-  async decodeEvents(
-    blockHash: string,
-    lookup: PalletCallLookup
-  ): Promise<DecodedEvent[]> {
+  async decodeEvents(blockHash: string, lookup: PalletCallLookup): Promise<DecodedEvent[]> {
     try {
-      const storageHex: string | null = await this.rpcCall(
-        "state_getStorage",
-        [SYSTEM_EVENTS_KEY, blockHash]
-      );
+      const storageHex: string | null = await this.rpcCall("state_getStorage", [
+        SYSTEM_EVENTS_KEY,
+        blockHash,
+      ]);
       if (!storageHex) return [];
 
       const bytes = hexToBytes(storageHex);
@@ -606,23 +599,15 @@ export class ExtrinsicDecoder {
         const palletIndex = bytes[offset++];
         const eventIndex = bytes[offset++];
 
-        const palletName =
-          lookup.palletsByIndex.get(palletIndex)?.name ?? `Pallet(${palletIndex})`;
-        const eventVariant = lookup.eventsByPalletIndex
-          .get(palletIndex)
-          ?.get(eventIndex);
+        const palletName = lookup.palletsByIndex.get(palletIndex)?.name ?? `Pallet(${palletIndex})`;
+        const eventVariant = lookup.eventsByPalletIndex.get(palletIndex)?.get(eventIndex);
         const eventName = eventVariant?.name ?? `event(${eventIndex})`;
 
         // ── Event data fields ──
         const data: Record<string, unknown> = {};
         if (eventVariant?.fields && eventVariant.fields.length > 0) {
           for (const field of eventVariant.fields) {
-            const r = readScaleValue(
-              bytes,
-              offset,
-              field.typeId,
-              lookup.rawTypes
-            );
+            const r = readScaleValue(bytes, offset, field.typeId, lookup.rawTypes);
             data[field.name ?? `_${field.typeId}`] = r.value;
             offset = r.offset;
           }
@@ -644,10 +629,7 @@ export class ExtrinsicDecoder {
 
       return events;
     } catch (err) {
-      console.error(
-        `[ExtrinsicDecoder] Failed to decode events for ${blockHash}:`,
-        err
-      );
+      console.error(`[ExtrinsicDecoder] Failed to decode events for ${blockHash}:`, err);
       return [];
     }
   }
@@ -664,12 +646,10 @@ export class ExtrinsicDecoder {
     offset: number,
     palletIndex: number,
     callIndex: number,
-    lookup: PalletCallLookup
+    lookup: PalletCallLookup,
   ): Record<string, unknown> {
     try {
-      const callVariant = lookup.callsByPalletIndex
-        .get(palletIndex)
-        ?.get(callIndex);
+      const callVariant = lookup.callsByPalletIndex.get(palletIndex)?.get(callIndex);
 
       if (!callVariant || callVariant.fields.length === 0) {
         return {};
@@ -689,17 +669,14 @@ export class ExtrinsicDecoder {
     }
   }
 
-  private resolvePalletName(
-    index: number,
-    lookup: PalletCallLookup
-  ): string {
+  private resolvePalletName(index: number, lookup: PalletCallLookup): string {
     return lookup.palletsByIndex.get(index)?.name ?? `Pallet(${index})`;
   }
 
   private resolveCallName(
     palletIndex: number,
     callIndex: number,
-    lookup: PalletCallLookup
+    lookup: PalletCallLookup,
   ): string {
     const pallet = lookup.palletsByIndex.get(palletIndex);
     if (!pallet) return `call(${callIndex})`;
@@ -711,24 +688,17 @@ export class ExtrinsicDecoder {
     return json?.specVersion ?? 0;
   }
 
-  private async fetchAndDecodeMetadata(
-    blockHash: string
-  ): Promise<PalletCallLookup> {
-    const metaHex: string = await this.rpcCall("state_getMetadata", [
-      blockHash,
-    ]);
+  private async fetchAndDecodeMetadata(blockHash: string): Promise<PalletCallLookup> {
+    const metaHex: string = await this.rpcCall("state_getMetadata", [blockHash]);
 
     const metaBytes = hexToBytes(metaHex);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
     const decoded: any = decAnyMetadata(metaBytes);
     const v = decoded.metadata.value;
 
     // Build pallet index → { name, calls } lookup
-    const palletsByIndex = new Map<
-      number,
-      { name: string; calls: Map<number, string> }
-    >();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const palletsByIndex = new Map<number, { name: string; calls: Map<number, string> }>();
+
     const lookupFn: any = getLookupFn(v);
 
     for (const pallet of v.pallets as Array<{ name: string; index: number; calls?: number }>) {
@@ -739,7 +709,7 @@ export class ExtrinsicDecoder {
           const callType = lookupFn(pallet.calls);
           if (callType.type === "enum") {
             for (const [name, info] of Object.entries(
-              callType.value as Record<string, { idx: number }>
+              callType.value as Record<string, { idx: number }>,
             )) {
               calls.set(info.idx, name);
             }
@@ -753,7 +723,7 @@ export class ExtrinsicDecoder {
     }
 
     // Build raw type registry for SCALE traversal
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
     const rawTypes = new Map<number, { tag: string; value: any }>();
     for (const entry of v.lookup as Array<{ id: number; def: { tag: string; value: any } }>) {
       rawTypes.set(entry.id, entry.def);

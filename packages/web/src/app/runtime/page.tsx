@@ -5,6 +5,8 @@ import {
   type RuntimeSummary,
 } from "@/lib/api";
 
+export const dynamic = "force-dynamic";
+
 /**
  * Runtime Modules page — shows all pallets for a given spec version
  * with their call, event, storage, constant, and error counts.
@@ -31,9 +33,7 @@ export default async function RuntimePage({
       error = "No runtime versions indexed yet. The indexer is still syncing.";
     } else {
       // Pick the requested version or the latest
-      activeVersion = params.v
-        ? parseInt(params.v, 10)
-        : versions[0].specVersion;
+      activeVersion = params.v ? parseInt(params.v, 10) : versions[0].specVersion;
       runtime = await getRuntimeModules(activeVersion);
     }
   } catch {
@@ -50,11 +50,7 @@ export default async function RuntimePage({
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold text-zinc-100">Runtime Modules</h1>
-        {runtime && (
-          <span className="text-sm text-zinc-400">
-            {runtime.pallets.length} pallets
-          </span>
-        )}
+        {runtime && <span className="text-sm text-zinc-400">{runtime.pallets.length} pallets</span>}
       </div>
 
       {/* Spec version selector */}
@@ -87,8 +83,8 @@ export default async function RuntimePage({
             if (!v) return null;
             return (
               <>
-                Blocks #{v.fromBlock.toLocaleString()} – #{v.toBlock.toLocaleString()}{" "}
-                ({v.blockCount.toLocaleString()} blocks)
+                Blocks #{v.fromBlock.toLocaleString()} – #{v.toBlock.toLocaleString()} (
+                {v.blockCount.toLocaleString()} blocks)
               </>
             );
           })()}
@@ -130,24 +126,12 @@ export default async function RuntimePage({
               <tbody>
                 {runtime.pallets.map((pallet) => (
                   <tr key={pallet.index} className="table-row">
-                    <td className="py-2.5 pr-4 font-medium text-zinc-200">
-                      {pallet.name}
-                    </td>
-                    <td className="py-2.5 pr-4 text-right text-zinc-400">
-                      {pallet.callCount}
-                    </td>
-                    <td className="py-2.5 pr-4 text-right text-zinc-400">
-                      {pallet.eventCount}
-                    </td>
-                    <td className="py-2.5 pr-4 text-right text-zinc-400">
-                      {pallet.storageCount}
-                    </td>
-                    <td className="py-2.5 pr-4 text-right text-zinc-400">
-                      {pallet.constantCount}
-                    </td>
-                    <td className="py-2.5 text-right text-zinc-400">
-                      {pallet.errorCount}
-                    </td>
+                    <td className="py-2.5 pr-4 font-medium text-zinc-200">{pallet.name}</td>
+                    <td className="py-2.5 pr-4 text-right text-zinc-400">{pallet.callCount}</td>
+                    <td className="py-2.5 pr-4 text-right text-zinc-400">{pallet.eventCount}</td>
+                    <td className="py-2.5 pr-4 text-right text-zinc-400">{pallet.storageCount}</td>
+                    <td className="py-2.5 pr-4 text-right text-zinc-400">{pallet.constantCount}</td>
+                    <td className="py-2.5 text-right text-zinc-400">{pallet.errorCount}</td>
                   </tr>
                 ))}
               </tbody>

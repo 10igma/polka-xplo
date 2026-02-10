@@ -8,15 +8,9 @@ function toCamelCase(s: string): string {
   return s.charAt(0).toLowerCase() + s.slice(1);
 }
 
-export function ExtrinsicList({
-  extrinsics,
-}: {
-  extrinsics: ExtrinsicSummary[];
-}) {
+export function ExtrinsicList({ extrinsics }: { extrinsics: ExtrinsicSummary[] }) {
   if (extrinsics.length === 0) {
-    return (
-      <div className="text-center py-8 text-zinc-500">No extrinsics found.</div>
-    );
+    return <div className="text-center py-8 text-zinc-500">No extrinsics found.</div>;
   }
 
   return (
@@ -35,10 +29,7 @@ export function ExtrinsicList({
           {extrinsics.map((ext) => (
             <tr key={ext.id} className="table-row">
               <td className="py-2.5 pr-4 font-mono text-xs">
-                <a
-                  href={`/extrinsic/${ext.id}`}
-                  className="text-accent hover:underline"
-                >
+                <a href={`/extrinsic/${ext.id}`} className="text-accent hover:underline">
                   {ext.id}
                 </a>
               </td>
@@ -58,7 +49,13 @@ export function ExtrinsicList({
                 {ext.success ? (
                   <span className="badge-success">
                     <svg width="12" height="12" viewBox="0 0 12 12" fill="none" className="mr-1">
-                      <path d="M2.5 6L5 8.5L9.5 3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                      <path
+                        d="M2.5 6L5 8.5L9.5 3.5"
+                        stroke="currentColor"
+                        strokeWidth="1.5"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
                     </svg>
                     Success
                   </span>

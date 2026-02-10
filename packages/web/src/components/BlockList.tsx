@@ -4,9 +4,7 @@ import { truncateHash, timeAgo, formatNumber } from "@/lib/format";
 
 export function BlockList({ blocks }: { blocks: BlockSummary[] }) {
   if (blocks.length === 0) {
-    return (
-      <div className="text-center py-12 text-zinc-500">No blocks indexed yet.</div>
-    );
+    return <div className="text-center py-12 text-zinc-500">No blocks indexed yet.</div>;
   }
 
   return (
@@ -35,15 +33,9 @@ export function BlockList({ blocks }: { blocks: BlockSummary[] }) {
               <td className="py-2.5 pr-4 font-mono text-xs text-zinc-400">
                 {truncateHash(block.hash)}
               </td>
-              <td className="py-2.5 pr-4 text-zinc-400">
-                {timeAgo(block.timestamp)}
-              </td>
-              <td className="py-2.5 pr-4 text-right text-zinc-300">
-                {block.extrinsicCount}
-              </td>
-              <td className="py-2.5 text-right text-zinc-300">
-                {block.eventCount}
-              </td>
+              <td className="py-2.5 pr-4 text-zinc-400">{timeAgo(block.timestamp)}</td>
+              <td className="py-2.5 pr-4 text-right text-zinc-300">{block.extrinsicCount}</td>
+              <td className="py-2.5 text-right text-zinc-300">{block.eventCount}</td>
             </tr>
           ))}
         </tbody>

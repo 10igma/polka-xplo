@@ -18,9 +18,7 @@ export default async function ChainPage({
 }) {
   const { chainId, path: pathSegments } = await params;
 
-  const chain: ChainConfig | undefined = DEFAULT_CHAINS.find(
-    (c) => c.id === chainId
-  );
+  const chain: ChainConfig | undefined = DEFAULT_CHAINS.find((c) => c.id === chainId);
 
   if (!chain) {
     return (
@@ -39,10 +37,7 @@ export default async function ChainPage({
         className="rounded-lg border p-4 flex items-center gap-3"
         style={{ borderColor: chain.colorTheme + "40" }}
       >
-        <div
-          className="w-3 h-3 rounded-full"
-          style={{ backgroundColor: chain.colorTheme }}
-        />
+        <div className="w-3 h-3 rounded-full" style={{ backgroundColor: chain.colorTheme }} />
         <div>
           <h1 className="text-lg font-bold text-zinc-100">{chain.name}</h1>
           <p className="text-xs text-zinc-500">
@@ -66,8 +61,8 @@ export default async function ChainPage({
           ) : null}
         </p>
         <p className="text-xs text-zinc-500 mt-2">
-          When the indexer is running for this chain, block and account data
-          will be displayed here using the chain-specific PAPI descriptor.
+          When the indexer is running for this chain, block and account data will be displayed here
+          using the chain-specific PAPI descriptor.
         </p>
       </div>
 

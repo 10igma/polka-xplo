@@ -1,4 +1,4 @@
-import fs from "node:fs";
+import fs from "node:fs/promises";
 import path from "node:path";
 import type {
   PalletExtension,
@@ -24,39 +24,46 @@ export class PluginRegistry {
 
   /** Discover and load extensions from the extensions directory */
   async discover(extensionsDir: string): Promise<void> {
-    if (!fs.existsSync(extensionsDir)) {
+    try {
+      await fs.access(extensionsDir);
+    } catch {
       console.log("[Registry] No extensions directory found. Using defaults only.");
       return;
     }
 
-    const entries = fs.readdirSync(extensionsDir, { withFileTypes: true });
+    const entries = await fs.readdir(extensionsDir, { withFileTypes: true });
 
     for (const entry of entries) {
       if (!entry.isDirectory()) continue;
 
       const manifestPath = path.join(extensionsDir, entry.name, "manifest.json");
-      if (!fs.existsSync(manifestPath)) {
+      try {
+        await fs.access(manifestPath);
+      } catch {
         console.warn(`[Registry] Skipping ${entry.name}: no manifest.json`);
         continue;
       }
 
       try {
-        const manifestRaw = fs.readFileSync(manifestPath, "utf-8");
+        const manifestRaw = await fs.readFile(manifestPath, "utf-8");
         const manifest: ExtensionManifest = JSON.parse(manifestRaw);
 
         console.log(`[Registry] Found extension: ${manifest.name} (${manifest.id})`);
 
         // Load the extension handler module
-        const handlerPath = path.join(
-          extensionsDir,
-          entry.name,
-          "indexer",
-          "event-handlers.js"
-        );
+        const handlerPath = path.join(extensionsDir, entry.name, "indexer", "event-handlers.js");
 
         let extension: PalletExtension = { manifest };
 
-        if (fs.existsSync(handlerPath)) {
+        let handlerExists = false;
+        try {
+          await fs.access(handlerPath);
+          handlerExists = true;
+        } catch {
+          /* ignore */
+        }
+
+        if (handlerExists) {
           const module = await import(handlerPath);
           extension = {
             manifest,
@@ -95,7 +102,7 @@ export class PluginRegistry {
 
     console.log(
       `[Registry] Registered: ${manifest.name} — ` +
-        `${manifest.supportedEvents.length} events, ${manifest.supportedCalls.length} calls`
+        `${manifest.supportedEvents.length} events, ${manifest.supportedCalls.length} calls`,
     );
   }
 
@@ -109,7 +116,7 @@ export class PluginRegistry {
       // Check if already applied
       const result = await query(
         `SELECT 1 FROM extension_migrations WHERE extension_id = $1 AND version = $2`,
-        [ext.manifest.id, ext.manifest.version]
+        [ext.manifest.id, ext.manifest.version],
       );
 
       if (result.rows.length > 0) continue;
@@ -118,10 +125,10 @@ export class PluginRegistry {
 
       const sql = ext.getMigrationSQL();
       await query(sql);
-      await query(
-        `INSERT INTO extension_migrations (extension_id, version) VALUES ($1, $2)`,
-        [ext.manifest.id, ext.manifest.version]
-      );
+      await query(`INSERT INTO extension_migrations (extension_id, version) VALUES ($1, $2)`, [
+        ext.manifest.id,
+        ext.manifest.version,
+      ]);
 
       console.log(`[Registry] Migration complete: ${migrationKey}`);
     }
@@ -141,10 +148,7 @@ export class PluginRegistry {
   }
 
   /** Invoke matching onExtrinsic handlers */
-  async invokeExtrinsicHandlers(
-    ctx: BlockContext,
-    extrinsic: Extrinsic
-  ): Promise<void> {
+  async invokeExtrinsicHandlers(ctx: BlockContext, extrinsic: Extrinsic): Promise<void> {
     const key = `${extrinsic.module}.${extrinsic.call}`;
     const handlers = this.callIndex.get(key) ?? [];
 
@@ -160,10 +164,7 @@ export class PluginRegistry {
   }
 
   /** Invoke matching onEvent handlers */
-  async invokeEventHandlers(
-    ctx: BlockContext,
-    event: ExplorerEvent
-  ): Promise<void> {
+  async invokeEventHandlers(ctx: BlockContext, event: ExplorerEvent): Promise<void> {
     const key = `${event.module}.${event.event}`;
     const handlers = this.eventIndex.get(key) ?? [];
 

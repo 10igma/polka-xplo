@@ -3,6 +3,8 @@ import { theme } from "@/lib/theme";
 import { AccountsTable } from "@/components/AccountsTable";
 import { Pagination } from "@/components/Pagination";
 
+export const dynamic = "force-dynamic";
+
 /**
  * Accounts list page — paginated ranked list of accounts.
  * Mirrors the statescan accounts view with rank, address, balance, and extrinsic count.
@@ -33,9 +35,7 @@ export default async function AccountsPage({
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold text-zinc-100">Accounts</h1>
         {accounts && (
-          <span className="text-sm text-zinc-400">
-            {accounts.total.toLocaleString()} total
-          </span>
+          <span className="text-sm text-zinc-400">{accounts.total.toLocaleString()} total</span>
         )}
       </div>
 
@@ -57,11 +57,7 @@ export default async function AccountsPage({
           </div>
 
           {/* Pagination */}
-          <Pagination
-            currentPage={page}
-            totalPages={totalPages}
-            basePath="/accounts"
-          />
+          <Pagination currentPage={page} totalPages={totalPages} basePath="/accounts" />
         </>
       )}
 

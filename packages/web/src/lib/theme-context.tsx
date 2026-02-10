@@ -16,9 +16,7 @@ export function ThemeProvider({
   theme: ThemeConfig;
   children: React.ReactNode;
 }) {
-  return (
-    <ThemeContext.Provider value={theme}>{children}</ThemeContext.Provider>
-  );
+  return <ThemeContext.Provider value={theme}>{children}</ThemeContext.Provider>;
 }
 
 /** Access the current theme in any client component */

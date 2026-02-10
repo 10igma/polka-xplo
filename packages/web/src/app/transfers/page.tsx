@@ -3,6 +3,8 @@ import { TransfersTable } from "@/components/TransfersTable";
 import { Pagination } from "@/components/Pagination";
 import { theme } from "@/lib/theme";
 
+export const dynamic = "force-dynamic";
+
 /**
  * Transfers list page — paginated table of all balance transfer events.
  */
@@ -32,9 +34,7 @@ export default async function TransfersPage({
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold text-zinc-100">Transfers</h1>
         {transfers && (
-          <span className="text-sm text-zinc-400">
-            {transfers.total.toLocaleString()} total
-          </span>
+          <span className="text-sm text-zinc-400">{transfers.total.toLocaleString()} total</span>
         )}
       </div>
 
@@ -54,11 +54,7 @@ export default async function TransfersPage({
             />
           </div>
 
-          <Pagination
-            currentPage={page}
-            totalPages={totalPages}
-            basePath="/transfers"
-          />
+          <Pagination currentPage={page} totalPages={totalPages} basePath="/transfers" />
         </>
       )}
 

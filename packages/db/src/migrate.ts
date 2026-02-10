@@ -8,15 +8,13 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 function findMigrationsDir(): string {
   // When run from dist/, look for src/migrations relative to the package root
   const candidates = [
-    path.join(__dirname, "..", "src", "migrations"),  // dist/ → package root → src/migrations
-    path.join(__dirname, "migrations"),                // if migrations are alongside compiled output
+    path.join(__dirname, "..", "src", "migrations"), // dist/ → package root → src/migrations
+    path.join(__dirname, "migrations"), // if migrations are alongside compiled output
   ];
   for (const dir of candidates) {
     if (fs.existsSync(dir)) return dir;
   }
-  throw new Error(
-    `Migrations directory not found. Searched: ${candidates.join(", ")}`
-  );
+  throw new Error(`Migrations directory not found. Searched: ${candidates.join(", ")}`);
 }
 
 async function ensureMigrationsTable(): Promise<void> {
@@ -30,16 +28,15 @@ async function ensureMigrationsTable(): Promise<void> {
 
 async function getAppliedMigrations(): Promise<Set<string>> {
   const result = await query<{ filename: string }>(
-    `SELECT filename FROM schema_migrations ORDER BY filename`
+    `SELECT filename FROM schema_migrations ORDER BY filename`,
   );
   return new Set(result.rows.map((r) => r.filename));
 }
 
 async function recordMigration(filename: string): Promise<void> {
-  await query(
-    `INSERT INTO schema_migrations (filename) VALUES ($1) ON CONFLICT DO NOTHING`,
-    [filename]
-  );
+  await query(`INSERT INTO schema_migrations (filename) VALUES ($1) ON CONFLICT DO NOTHING`, [
+    filename,
+  ]);
 }
 
 async function runMigrations(): Promise<void> {
@@ -70,7 +67,9 @@ async function runMigrations(): Promise<void> {
     newCount++;
   }
 
-  console.log(`[DB] Migrations complete. ${newCount} new, ${files.length - newCount} already applied.`);
+  console.log(
+    `[DB] Migrations complete. ${newCount} new, ${files.length - newCount} already applied.`,
+  );
   await closePool();
 }
 

@@ -5,10 +5,7 @@
 
 // Use non-NEXT_PUBLIC_ env var for server-side fetches (Server Components / ISR),
 // falling back to NEXT_PUBLIC_ for client-side fetches and localhost for dev.
-const API_BASE =
-  process.env.API_URL ??
-  process.env.NEXT_PUBLIC_API_URL ??
-  "http://localhost:3001";
+const API_BASE = process.env.API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
 
 async function fetchJson<T>(path: string): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
@@ -52,10 +49,7 @@ export interface BlockDetail {
   events: EventSummary[];
 }
 
-export async function getBlocks(
-  limit = 20,
-  offset = 0
-): Promise<BlocksResponse> {
+export async function getBlocks(limit = 20, offset = 0): Promise<BlocksResponse> {
   return fetchJson(`/api/blocks?limit=${limit}&offset=${offset}`);
 }
 
@@ -102,7 +96,7 @@ export interface ExtrinsicsResponse {
 export async function getExtrinsics(
   limit = 25,
   offset = 0,
-  signedOnly = false
+  signedOnly = false,
 ): Promise<ExtrinsicsResponse> {
   const params = `limit=${limit}&offset=${offset}${signedOnly ? "&signed=true" : ""}`;
   return fetchJson(`/api/extrinsics?${params}`);
@@ -130,11 +124,7 @@ export interface EventsResponse {
   hasMore: boolean;
 }
 
-export async function getEvents(
-  limit = 25,
-  offset = 0,
-  module?: string
-): Promise<EventsResponse> {
+export async function getEvents(limit = 25, offset = 0, module?: string): Promise<EventsResponse> {
   const params = `limit=${limit}&offset=${offset}${module ? `&module=${encodeURIComponent(module)}` : ""}`;
   return fetchJson(`/api/events?${params}`);
 }
@@ -187,10 +177,7 @@ export interface AccountsResponse {
   hasMore: boolean;
 }
 
-export async function getAccounts(
-  limit = 25,
-  offset = 0
-): Promise<AccountsResponse> {
+export async function getAccounts(limit = 25, offset = 0): Promise<AccountsResponse> {
   return fetchJson(`/api/accounts?limit=${limit}&offset=${offset}`);
 }
 
@@ -251,7 +238,8 @@ export interface TransferSummary {
 }
 
 export async function getTransfers(limit = 10): Promise<TransferSummary[]> {
-  return fetchJson(`/api/transfers?limit=${limit}`);
+  const res: TransfersResponse = await fetchJson(`/api/transfers?limit=${limit}`);
+  return res.data;
 }
 
 export interface TransfersResponse {
@@ -262,10 +250,7 @@ export interface TransfersResponse {
   hasMore: boolean;
 }
 
-export async function getTransfersList(
-  limit = 25,
-  offset = 0
-): Promise<TransfersResponse> {
+export async function getTransfersList(limit = 25, offset = 0): Promise<TransfersResponse> {
   return fetchJson(`/api/transfers?limit=${limit}&offset=${offset}`);
 }
 
@@ -359,9 +344,6 @@ export interface LogsResponse {
   hasMore: boolean;
 }
 
-export async function getLogs(
-  limit = 25,
-  offset = 0
-): Promise<LogsResponse> {
+export async function getLogs(limit = 25, offset = 0): Promise<LogsResponse> {
   return fetchJson(`/api/logs?limit=${limit}&offset=${offset}`);
 }

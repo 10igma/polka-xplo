@@ -3,6 +3,8 @@ import { ExtrinsicsTable } from "@/components/ExtrinsicsTable";
 import { Pagination } from "@/components/Pagination";
 import { theme } from "@/lib/theme";
 
+export const dynamic = "force-dynamic";
+
 /**
  * Extrinsics list page — paginated table of all extrinsics.
  * Supports ?signed=true to hide unsigned (inherent) extrinsics.
@@ -34,9 +36,7 @@ export default async function ExtrinsicsPage({
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold text-zinc-100">Extrinsics</h1>
         {extrinsics && (
-          <span className="text-sm text-zinc-400">
-            {extrinsics.total.toLocaleString()} total
-          </span>
+          <span className="text-sm text-zinc-400">{extrinsics.total.toLocaleString()} total</span>
         )}
       </div>
 

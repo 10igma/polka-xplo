@@ -24,7 +24,7 @@ export function PrefixSelector() {
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
-  const currentLabel =
+  const _currentLabel =
     SS58_PRESETS.find((p) => p.prefix === prefix)?.label ?? `Custom (${prefix})`;
 
   return (
@@ -74,9 +74,7 @@ export function PrefixSelector() {
                 setOpen(false);
               }}
               className={`w-full text-left px-3 py-1.5 hover:bg-zinc-800 transition-colors flex items-center justify-between ${
-                prefix === p.prefix
-                  ? "text-accent"
-                  : "text-zinc-300"
+                prefix === p.prefix ? "text-accent" : "text-zinc-300"
               }`}
             >
               <span>{p.label}</span>
@@ -94,9 +92,7 @@ export function PrefixSelector() {
             </button>
           ))}
           <div className="border-t border-zinc-700 mt-1 pt-1 px-3 pb-2">
-            <label className="text-[11px] text-zinc-500 block mb-1">
-              Custom prefix
-            </label>
+            <label className="text-[11px] text-zinc-500 block mb-1">Custom prefix</label>
             <div className="flex gap-1">
               <input
                 type="number"

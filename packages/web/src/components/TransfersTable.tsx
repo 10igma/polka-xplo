@@ -53,24 +53,14 @@ export function TransfersTable({
               </td>
               <td className="py-2.5 pr-4">
                 {tx.from ? (
-                  <AddressDisplay
-                    address={tx.from}
-                    truncate
-                    link
-                    className="font-mono text-xs"
-                  />
+                  <AddressDisplay address={tx.from} truncate link className="font-mono text-xs" />
                 ) : (
                   <span className="text-zinc-600 text-xs">&mdash;</span>
                 )}
               </td>
               <td className="py-2.5 pr-4">
                 {tx.to ? (
-                  <AddressDisplay
-                    address={tx.to}
-                    truncate
-                    link
-                    className="font-mono text-xs"
-                  />
+                  <AddressDisplay address={tx.to} truncate link className="font-mono text-xs" />
                 ) : (
                   <span className="text-zinc-600 text-xs">&mdash;</span>
                 )}
@@ -78,9 +68,7 @@ export function TransfersTable({
               <td className="py-2.5 pr-4 text-right font-mono text-xs text-zinc-200">
                 {formatBalance(tx.amount, tokenDecimals, tokenSymbol)}
               </td>
-              <td className="py-2.5 text-right text-xs text-zinc-500">
-                {timeAgo(tx.timestamp)}
-              </td>
+              <td className="py-2.5 text-right text-xs text-zinc-500">{timeAgo(tx.timestamp)}</td>
             </tr>
           ))}
         </tbody>

@@ -13,17 +13,9 @@ interface DigestLog {
  * Shows each log with index, type, engine, and expandable hex data.
  * Mirrors statescan.io's Logs tab layout.
  */
-export function LogList({
-  logs,
-  blockHeight,
-}: {
-  logs: DigestLog[];
-  blockHeight: number;
-}) {
+export function LogList({ logs, blockHeight }: { logs: DigestLog[]; blockHeight: number }) {
   if (logs.length === 0) {
-    return (
-      <div className="text-center py-8 text-zinc-500">No logs found.</div>
-    );
+    return <div className="text-center py-8 text-zinc-500">No logs found.</div>;
   }
 
   return (
@@ -62,22 +54,15 @@ function LogRow({
 
   return (
     <>
-      <tr
-        className="table-row cursor-pointer"
-        onClick={() => hasData && setExpanded(!expanded)}
-      >
+      <tr className="table-row cursor-pointer" onClick={() => hasData && setExpanded(!expanded)}>
         <td className="py-2.5 pr-4 font-mono text-xs text-zinc-400">
           {blockHeight}-{index}
         </td>
-        <td className="py-2.5 pr-4 text-zinc-400 text-xs">
-          {blockHeight.toLocaleString()}
-        </td>
+        <td className="py-2.5 pr-4 text-zinc-400 text-xs">{blockHeight.toLocaleString()}</td>
         <td className="py-2.5 pr-4">
           <span className="badge-info">{log.type}</span>
         </td>
-        <td className="py-2.5 pr-4 font-mono text-xs text-zinc-300">
-          {log.engine ?? "—"}
-        </td>
+        <td className="py-2.5 pr-4 font-mono text-xs text-zinc-300">{log.engine ?? "—"}</td>
         <td className="py-2.5">
           {hasData && (
             <button className="text-zinc-500 hover:text-zinc-300 transition-colors">

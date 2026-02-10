@@ -13,6 +13,7 @@ import {
   transaction,
 } from "@polka-xplo/db";
 import type { PluginRegistry } from "../plugins/registry.js";
+import { extractAccountsFromEvent } from "../event-utils.js";
 
 export interface RawBlockData {
   number: number;
@@ -56,7 +57,7 @@ export interface RawEvent {
 export async function processBlock(
   raw: RawBlockData,
   status: BlockStatus,
-  registry: PluginRegistry
+  registry: PluginRegistry,
 ): Promise<void> {
   const blockCtx: BlockContext = {
     blockHeight: raw.number,
@@ -124,9 +125,7 @@ export async function processBlock(
     for (const rawEvt of raw.events) {
       const evtId = `${raw.number}-${rawEvt.index}`;
       const extrinsicId =
-        rawEvt.extrinsicIndex !== null
-          ? extrinsicMap.get(rawEvt.extrinsicIndex) ?? null
-          : null;
+        rawEvt.extrinsicIndex !== null ? (extrinsicMap.get(rawEvt.extrinsicIndex) ?? null) : null;
 
       const event: ExplorerEvent = {
         id: evtId,
@@ -156,57 +155,4 @@ export async function processBlock(
       await registry.invokeEventHandlers(blockCtx, event);
     }
   });
-}
-
-// ============================================================
-// Event-based account extraction
-// ============================================================
-
-/**
- * Extract account addresses mentioned in well-known Substrate events.
- * This ensures accounts appear in the explorer even if they never signed
- * a transaction (e.g. transfer recipients, endowed accounts, treasury).
- */
-function extractAccountsFromEvent(evt: RawEvent): string[] {
-  const addrs: string[] = [];
-  const d = evt.data;
-  if (!d || typeof d !== "object") return addrs;
-
-  switch (`${evt.module}.${evt.event}`) {
-    // Balances pallet
-    case "Balances.Transfer":
-      if (d.from) addrs.push(String(d.from));
-      if (d.to) addrs.push(String(d.to));
-      break;
-    case "Balances.Endowed":
-    case "Balances.DustLost":
-    case "Balances.BalanceSet":
-    case "Balances.Reserved":
-    case "Balances.Unreserved":
-    case "Balances.Slashed":
-    case "Balances.Frozen":
-    case "Balances.Thawed":
-      if (d.who) addrs.push(String(d.who));
-      if (d.account) addrs.push(String(d.account));
-      break;
-    case "Balances.Deposit":
-    case "Balances.Withdraw":
-      if (d.who) addrs.push(String(d.who));
-      break;
-    // System pallet
-    case "System.NewAccount":
-    case "System.KilledAccount":
-      if (d.account) addrs.push(String(d.account));
-      break;
-    // Staking / Session
-    case "Staking.Rewarded":
-      if (d.stash) addrs.push(String(d.stash));
-      break;
-    case "Staking.Slashed":
-      if (d.staker) addrs.push(String(d.staker));
-      break;
-  }
-
-  // Filter out obviously invalid values (non-hex, too short)
-  return addrs.filter((a) => a.startsWith("0x") && a.length >= 42);
 }

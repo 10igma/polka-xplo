@@ -67,16 +67,10 @@ export function HeaderNav({ apiDocsUrl }: { apiDocsUrl: string }) {
         )}
       </div>
 
-      <a
-        href="/chain-state/System/Account"
-        className="hover:text-zinc-100 transition-colors"
-      >
+      <a href="/chain-state/System/Account" className="hover:text-zinc-100 transition-colors">
         Chain State
       </a>
-      <a
-        href="/status"
-        className="hover:text-zinc-100 transition-colors"
-      >
+      <a href="/status" className="hover:text-zinc-100 transition-colors">
         Status
       </a>
       <a

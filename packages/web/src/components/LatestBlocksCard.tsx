@@ -1,5 +1,5 @@
 import type { BlockSummary } from "@/lib/api";
-import { truncateHash, timeAgo, formatNumber } from "@/lib/format";
+import { timeAgo, formatNumber } from "@/lib/format";
 import { AddressDisplay } from "./AddressDisplay";
 
 /**
@@ -8,9 +8,7 @@ import { AddressDisplay } from "./AddressDisplay";
  */
 export function LatestBlocksCard({ blocks }: { blocks: BlockSummary[] }) {
   if (blocks.length === 0) {
-    return (
-      <div className="text-center py-8 text-zinc-500">No blocks indexed yet.</div>
-    );
+    return <div className="text-center py-8 text-zinc-500">No blocks indexed yet.</div>;
   }
 
   return (
@@ -70,13 +68,9 @@ export function LatestBlocksCard({ blocks }: { blocks: BlockSummary[] }) {
               {timeAgo(block.timestamp)}
               {block.validatorId && (
                 <>
-                  {" "}&middot;{" "}
-                  <AddressDisplay
-                    address={block.validatorId}
-                    truncate
-                    link
-                    className="font-mono"
-                  />
+                  {" "}
+                  &middot;{" "}
+                  <AddressDisplay address={block.validatorId} truncate link className="font-mono" />
                 </>
               )}
             </p>

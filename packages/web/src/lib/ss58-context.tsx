@@ -45,7 +45,7 @@ export function SS58Provider({
       // (simple passthrough if we can't decode)
       return hexOrSs58;
     },
-    [prefix]
+    [prefix],
   );
 
   return (

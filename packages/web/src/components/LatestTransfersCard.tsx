@@ -1,5 +1,5 @@
 import type { TransferSummary } from "@/lib/api";
-import { truncateHash, timeAgo, formatBalance } from "@/lib/format";
+import { timeAgo, formatBalance } from "@/lib/format";
 import { AddressDisplay } from "./AddressDisplay";
 
 /**
@@ -16,9 +16,7 @@ export function LatestTransfersCard({
   tokenSymbol?: string;
 }) {
   if (transfers.length === 0) {
-    return (
-      <div className="text-center py-8 text-zinc-500">No transfers found.</div>
-    );
+    return <div className="text-center py-8 text-zinc-500">No transfers found.</div>;
   }
 
   return (
@@ -55,9 +53,7 @@ export function LatestTransfersCard({
                 {tx.extrinsicId}
               </a>
             </div>
-            <p className="text-xs text-zinc-500 truncate">
-              {timeAgo(tx.timestamp)}
-            </p>
+            <p className="text-xs text-zinc-500 truncate">{timeAgo(tx.timestamp)}</p>
           </div>
 
           {/* Amount + destination */}
@@ -67,12 +63,7 @@ export function LatestTransfersCard({
             </p>
             {tx.to && (
               <p className="text-xs text-zinc-500 truncate">
-                <AddressDisplay
-                  address={tx.to}
-                  truncate
-                  link
-                  className="text-xs"
-                />
+                <AddressDisplay address={tx.to} truncate link className="text-xs" />
               </p>
             )}
           </div>

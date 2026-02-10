@@ -8,10 +8,7 @@
  * SS58 encoding is applied at the UI/API boundary based on a configurable prefix.
  */
 
-import {
-  AccountId,
-  getSs58AddressInfo,
-} from "@polkadot-api/substrate-bindings";
+import { AccountId, getSs58AddressInfo } from "@polkadot-api/substrate-bindings";
 import { toHex, fromHex } from "@polkadot-api/utils";
 
 /**
