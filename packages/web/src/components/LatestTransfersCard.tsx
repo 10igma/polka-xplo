@@ -1,5 +1,6 @@
 import type { TransferSummary } from "@/lib/api";
 import { truncateHash, timeAgo, formatBalance } from "@/lib/format";
+import { AddressDisplay } from "./AddressDisplay";
 
 /**
  * Compact transfer list card matching statescan homepage layout.
@@ -66,12 +67,12 @@ export function LatestTransfersCard({
             </p>
             {tx.to && (
               <p className="text-xs text-zinc-500 truncate">
-                <a
-                  href={`/account/${tx.to}`}
-                  className="text-polkadot-pink hover:underline"
-                >
-                  {truncateHash(tx.to)}
-                </a>
+                <AddressDisplay
+                  address={tx.to}
+                  truncate
+                  link
+                  className="text-xs"
+                />
               </p>
             )}
           </div>

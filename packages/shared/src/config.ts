@@ -82,13 +82,18 @@ export function detectSearchType(
     return "hash";
   }
 
+  // Hex public key (32 bytes = 64 hex chars + 0x prefix)
+  if (/^0x[0-9a-fA-F]{64}$/.test(trimmed)) {
+    return "address";
+  }
+
   // Block number: purely numeric
   if (/^\d+$/.test(trimmed)) {
     return "blockNumber";
   }
 
-  // SS58 address: starts with a character and is 46-48 chars
-  if (/^[1-9A-HJ-NP-Za-km-z]{46,48}$/.test(trimmed)) {
+  // SS58 address: base58 chars, typically 46-50 chars (varies by prefix)
+  if (/^[1-9A-HJ-NP-Za-km-z]{44,52}$/.test(trimmed)) {
     return "address";
   }
 

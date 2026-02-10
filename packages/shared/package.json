@@ -15,6 +15,10 @@
     "dev": "tsc --watch",
     "lint": "tsc --noEmit"
   },
+  "dependencies": {
+    "@polkadot-api/substrate-bindings": "*",
+    "@polkadot-api/utils": "*"
+  },
   "devDependencies": {
     "typescript": "^5.7.0"
   }

@@ -1,6 +1,7 @@
 import React from "react";
 import type { ExtrinsicSummary } from "@/lib/api";
 import { truncateHash } from "@/lib/format";
+import { AddressDisplay } from "./AddressDisplay";
 
 /** Convert PascalCase to camelCase (e.g. "ParachainSystem" → "parachainSystem") */
 function toCamelCase(s: string): string {
@@ -70,8 +71,17 @@ export function ExtrinsicList({
                   {toCamelCase(ext.module)}({ext.call})
                 </span>
               </td>
-              <td className="py-2.5 font-mono text-xs text-zinc-400">
-                {ext.signer ? truncateHash(ext.signer) : "—"}
+              <td className="py-2.5 font-mono text-xs">
+                {ext.signer ? (
+                  <AddressDisplay
+                    address={ext.signer}
+                    truncate
+                    link
+                    className="font-mono text-xs"
+                  />
+                ) : (
+                  <span className="text-zinc-400">—</span>
+                )}
               </td>
             </tr>
           ))}

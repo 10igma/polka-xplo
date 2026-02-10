@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import { SearchBar } from "../components/SearchBar";
+import { Providers } from "../components/Providers";
+import { HeaderNav } from "../components/HeaderNav";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -16,17 +18,20 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark">
       <body className="min-h-screen flex flex-col">
-        <Header />
-        <main className="flex-1 max-w-7xl w-full mx-auto px-4 py-6">
-          {children}
-        </main>
-        <Footer />
+        <Providers>
+          <Header />
+          <main className="flex-1 max-w-7xl w-full mx-auto px-4 py-6">
+            {children}
+          </main>
+          <Footer />
+        </Providers>
       </body>
     </html>
   );
 }
 
 function Header() {
+  const apiDocsUrl = `${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001"}/api-docs`;
   return (
     <header className="sticky top-0 z-50 border-b border-zinc-800 bg-zinc-950/80 backdrop-blur-sm">
       <div className="max-w-7xl mx-auto px-4 h-14 flex items-center justify-between gap-4">
@@ -38,25 +43,7 @@ function Header() {
 
         <SearchBar />
 
-        <nav className="hidden sm:flex items-center gap-4 text-sm text-zinc-400">
-          <a href="/" className="hover:text-zinc-100 transition-colors">
-            Blocks
-          </a>
-          <a
-            href="/chain-state/System/Account"
-            className="hover:text-zinc-100 transition-colors"
-          >
-            Chain State
-          </a>
-          <a
-            href={`${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001"}/api-docs`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="hover:text-zinc-100 transition-colors"
-          >
-            API
-          </a>
-        </nav>
+        <HeaderNav apiDocsUrl={apiDocsUrl} />
       </div>
     </header>
   );

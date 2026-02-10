@@ -19,7 +19,7 @@ import {
   getChainStats,
   getLatestTransfers,
 } from "@polka-xplo/db";
-import { detectSearchType } from "@polka-xplo/shared";
+import { detectSearchType, normalizeAddress } from "@polka-xplo/shared";
 
 /**
  * The API server exposes indexed blockchain data to the frontend.
@@ -354,21 +354,25 @@ export function createApiServer(
   app.get("/api/accounts/:address", async (req, res) => {
     try {
       const { address } = req.params;
-      // SS58 addresses are 46-48 alphanumeric chars; also allow 0x-prefixed EVM addresses
       if (!address || address.length > 128) {
         res.status(400).json({ error: "Invalid address format" });
         return;
       }
-      const account = await getAccount(address);
+
+      // Normalize SS58 or hex input to canonical hex public key
+      const hexKey = normalizeAddress(address);
+      if (!hexKey) {
+        res.status(400).json({ error: "Invalid address — could not decode SS58 or hex public key" });
+        return;
+      }
+
+      const account = await getAccount(hexKey);
       if (!account) {
         res.status(404).json({ error: "Account not found" });
         return;
       }
 
-      const recentExtrinsics = await getExtrinsicsBySigner(
-        address,
-        20
-      );
+      const recentExtrinsics = await getExtrinsicsBySigner(hexKey, 20);
 
       res.json({
         account: {
@@ -563,7 +567,9 @@ export function createApiServer(
         }
 
         case "address": {
-          const account = await getAccount(input);
+          // Normalize SS58/hex to canonical hex public key
+          const hexAddr = normalizeAddress(input) ?? input;
+          const account = await getAccount(hexAddr);
           if (account) {
             results.push({
               type: "account",
@@ -575,9 +581,9 @@ export function createApiServer(
             // Even if we haven't indexed this account, provide a link
             results.push({
               type: "account",
-              id: input,
-              label: `Account ${input}`,
-              url: `/account/${input}`,
+              id: hexAddr,
+              label: `Account ${hexAddr}`,
+              url: `/account/${hexAddr}`,
             });
           }
           break;

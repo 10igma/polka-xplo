@@ -1,5 +1,6 @@
 import type { BlockSummary } from "@/lib/api";
 import { truncateHash, timeAgo, formatNumber } from "@/lib/format";
+import { AddressDisplay } from "./AddressDisplay";
 
 /**
  * Compact block list card matching statescan homepage layout.
@@ -68,7 +69,15 @@ export function LatestBlocksCard({ blocks }: { blocks: BlockSummary[] }) {
             <p className="text-xs text-zinc-500 truncate">
               {timeAgo(block.timestamp)}
               {block.validatorId && (
-                <> &middot; {truncateHash(block.validatorId)}</>
+                <>
+                  {" "}&middot;{" "}
+                  <AddressDisplay
+                    address={block.validatorId}
+                    truncate
+                    link
+                    className="font-mono"
+                  />
+                </>
               )}
             </p>
           </div>

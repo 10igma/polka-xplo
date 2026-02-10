@@ -1,12 +1,13 @@
 import { getAccount } from "@/lib/api";
-import { BalanceDisplay } from "@/components/BalanceDisplay";
 import { ExtrinsicList } from "@/components/ExtrinsicList";
-import { truncateHash, formatNumber } from "@/lib/format";
+import { AddressDisplay } from "@/components/AddressDisplay";
+import { formatNumber, formatBalance } from "@/lib/format";
 
 /**
  * Account Detail Page — Server Component
- * Shows account identity, balance breakdown, and recent activity.
- * Combines static DB data with the option for live PAPI balance updates.
+ * Matches statescan account view: address header, balance breakdown,
+ * and tabbed transaction history. Addresses display in SS58 format
+ * using the client-side prefix selector.
  */
 export default async function AccountPage({
   params,
@@ -28,53 +29,86 @@ export default async function AccountPage({
 
   const { account, balance, recentExtrinsics } = data;
 
+  // Balance computations
+  const free = BigInt(balance?.free || "0");
+  const reserved = BigInt(balance?.reserved || "0");
+  const frozen = BigInt(balance?.frozen || "0");
+  const transferable = free > frozen ? free - frozen : BigInt(0);
+  const total = free + reserved;
+
+  // Token config (TODO: make dynamic from chain config)
+  const decimals = 12;
+  const symbol = "AJUN";
+
   return (
     <div className="space-y-6">
-      {/* Account Header */}
-      <div className="flex items-center gap-4">
+      {/* Address header */}
+      <div className="flex items-center gap-3">
         {/* Identicon placeholder */}
-        <div className="w-12 h-12 rounded-full bg-gradient-to-br from-polkadot-pink to-polkadot-purple flex items-center justify-center text-white text-lg font-bold">
-          {address.slice(0, 2)}
+        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-polkadot-pink to-polkadot-purple flex items-center justify-center text-white text-sm font-bold shrink-0">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" />
+            <circle cx="12" cy="7" r="4" />
+          </svg>
         </div>
-        <div>
-          <h1 className="text-xl font-bold text-zinc-100">
-            {account.identity?.display ?? "Account"}
-          </h1>
-          <p className="text-xs font-mono text-zinc-400 break-all">
-            {address}
-          </p>
+        <div className="min-w-0">
+          {account.identity?.display && (
+            <h1 className="text-lg font-bold text-zinc-100">
+              {account.identity.display}
+            </h1>
+          )}
         </div>
       </div>
 
-      {/* Balance Section */}
-      <section>
-        <h2 className="text-lg font-semibold text-zinc-100 mb-3">Balance</h2>
-        <BalanceDisplay balance={balance} />
-      </section>
+      {/* Account detail card */}
+      <div className="card space-y-3">
+        <DetailRow label="Address">
+          <AddressDisplay
+            address={account.address}
+            className="text-sm font-mono text-zinc-200 break-all"
+          />
+        </DetailRow>
+      </div>
 
-      {/* Account Info */}
-      <section className="card space-y-3">
-        <h2 className="text-sm font-semibold text-zinc-300 mb-2">Details</h2>
-        <DetailRow
-          label="Public Key"
-          value={account.publicKey ?? "—"}
-          mono
+      {/* Balance breakdown — statescan style */}
+      <div className="card space-y-3">
+        <BalanceRow
+          label="Total Balance"
+          value={total.toString()}
+          decimals={decimals}
+          symbol={symbol}
+          primary
         />
-        <DetailRow
-          label="First Seen"
-          value={`Block #${formatNumber(account.createdAtBlock)}`}
+        <BalanceRow
+          label="Transferrable"
+          value={transferable.toString()}
+          decimals={decimals}
+          symbol={symbol}
         />
-        <DetailRow
-          label="Last Active"
-          value={`Block #${formatNumber(account.lastActiveBlock)}`}
+        <BalanceRow
+          label="Locked"
+          value={frozen.toString()}
+          decimals={decimals}
+          symbol={symbol}
         />
-      </section>
+        <BalanceRow
+          label="Reserved"
+          value={reserved.toString()}
+          decimals={decimals}
+          symbol={symbol}
+        />
+      </div>
 
-      {/* Recent Activity */}
+      {/* Transactions tab */}
       <section>
-        <h2 className="text-lg font-semibold text-zinc-100 mb-3">
-          Recent Activity
-        </h2>
+        <div className="flex gap-1 mb-4 border-b border-zinc-800">
+          <span className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-zinc-100 border-b-2 border-[var(--color-accent)] -mb-px">
+            Extrinsics
+            <span className="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-xs font-medium bg-zinc-700 text-zinc-200">
+              {recentExtrinsics.length}
+            </span>
+          </span>
+        </div>
         <div className="card">
           <ExtrinsicList extrinsics={recentExtrinsics} />
         </div>
@@ -85,20 +119,41 @@ export default async function AccountPage({
 
 function DetailRow({
   label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-4">
+      <span className="text-xs text-zinc-500 sm:w-32 shrink-0">{label}</span>
+      <div className="flex-1 min-w-0">{children}</div>
+    </div>
+  );
+}
+
+function BalanceRow({
+  label,
   value,
-  mono,
+  decimals,
+  symbol,
+  primary,
 }: {
   label: string;
   value: string;
-  mono?: boolean;
+  decimals: number;
+  symbol: string;
+  primary?: boolean;
 }) {
   return (
     <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-4">
       <span className="text-xs text-zinc-500 sm:w-32 shrink-0">{label}</span>
       <span
-        className={`text-sm text-zinc-200 break-all ${mono ? "font-mono" : ""}`}
+        className={`text-sm font-mono tabular-nums ${
+          primary ? "text-zinc-100 font-semibold" : "text-zinc-300"
+        }`}
       >
-        {value}
+        {formatBalance(value, decimals, symbol)}
       </span>
     </div>
   );

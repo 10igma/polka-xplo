@@ -1,6 +1,7 @@
 import { getExtrinsic } from "@/lib/api";
 import { EventList } from "@/components/EventList";
 import { JsonView } from "@/components/JsonView";
+import { AddressDisplay } from "@/components/AddressDisplay";
 import {
   truncateHash,
   formatBalance,
@@ -71,12 +72,18 @@ export default async function ExtrinsicPage({
           label="Call"
           value={extrinsic.call}
         />
-        <DetailRow
-          label="Signer"
-          value={extrinsic.signer ?? "Unsigned"}
-          mono
-          link={extrinsic.signer ? `/account/${extrinsic.signer}` : undefined}
-        />
+        <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-4">
+          <span className="text-xs text-zinc-500 sm:w-32 shrink-0">Signer</span>
+          {extrinsic.signer ? (
+            <AddressDisplay
+              address={extrinsic.signer}
+              link
+              className="text-sm font-mono"
+            />
+          ) : (
+            <span className="text-sm text-zinc-200">Unsigned</span>
+          )}
+        </div>
         {extrinsic.fee && (
           <DetailRow
             label="Fee"
