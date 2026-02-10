@@ -681,6 +681,53 @@ export async function getBlockHashForSpecVersion(
   return result.rows[0]?.hash ?? null;
 }
 
+/** Get paginated digest logs, unnested from blocks */
+export async function getDigestLogs(
+  limit: number = 25,
+  offset: number = 0
+): Promise<{
+  data: { blockHeight: number; logIndex: number; type: string; engine: string | null; data: string }[];
+  total: number;
+}> {
+  const [dataResult, countResult] = await Promise.all([
+    query<{
+      block_height: string;
+      log_index: string;
+      log_type: string;
+      engine: string | null;
+      log_data: string;
+    }>(
+      `SELECT b.height as block_height,
+              (row_number() OVER (PARTITION BY b.height ORDER BY idx.ordinality)) as log_index,
+              idx.elem->>'type' as log_type,
+              idx.elem->>'engine' as engine,
+              idx.elem->>'data' as log_data
+       FROM blocks b,
+            LATERAL jsonb_array_elements(b.digest_logs) WITH ORDINALITY AS idx(elem, ordinality)
+       WHERE b.digest_logs IS NOT NULL AND jsonb_array_length(b.digest_logs) > 0
+       ORDER BY b.height DESC, idx.ordinality
+       LIMIT $1 OFFSET $2`,
+      [limit, offset]
+    ),
+    query<{ count: string }>(
+      `SELECT SUM(jsonb_array_length(digest_logs))::text as count
+       FROM blocks
+       WHERE digest_logs IS NOT NULL AND jsonb_array_length(digest_logs) > 0`
+    ),
+  ]);
+
+  return {
+    data: dataResult.rows.map((r) => ({
+      blockHeight: parseInt(r.block_height, 10),
+      logIndex: parseInt(r.log_index, 10),
+      type: r.log_type,
+      engine: r.engine,
+      data: r.log_data,
+    })),
+    total: parseInt(countResult.rows[0]?.count ?? "0", 10),
+  };
+}
+
 export async function getDatabaseSize(): Promise<{
   totalSize: string;
   tables: { name: string; rows: number; size: string }[];

@@ -340,3 +340,28 @@ export async function getSpecVersions(): Promise<{ versions: SpecVersionInfo[] }
 export async function getRuntimeModules(specVersion: number): Promise<RuntimeSummary> {
   return fetchJson(`/api/runtime/${specVersion}`);
 }
+
+// ---- Logs ----
+
+export interface DigestLogEntry {
+  blockHeight: number;
+  logIndex: number;
+  type: string;
+  engine: string | null;
+  data: string;
+}
+
+export interface LogsResponse {
+  data: DigestLogEntry[];
+  total: number;
+  page: number;
+  pageSize: number;
+  hasMore: boolean;
+}
+
+export async function getLogs(
+  limit = 25,
+  offset = 0
+): Promise<LogsResponse> {
+  return fetchJson(`/api/logs?limit=${limit}&offset=${offset}`);
+}
