@@ -1,0 +1,41 @@
+{
+  "id": "ext-governance",
+  "name": "Governance",
+  "version": "1.0.0",
+  "description": "Cross-pallet governance extension — indexes democracy referenda, proposals, council motions, technical committee proposals, and preimages.",
+  "palletId": "Governance",
+  "supportedEvents": [
+    "Democracy.Proposed",
+    "Democracy.Tabled",
+    "Democracy.Started",
+    "Democracy.Passed",
+    "Democracy.NotPassed",
+    "Democracy.Voted",
+    "Council.Proposed",
+    "Council.Voted",
+    "Council.Approved",
+    "Council.Closed",
+    "Council.Executed",
+    "TechnicalCommittee.Proposed",
+    "TechnicalCommittee.Voted",
+    "TechnicalCommittee.Approved",
+    "TechnicalCommittee.Disapproved",
+    "TechnicalCommittee.Closed",
+    "TechnicalCommittee.Executed",
+    "Preimage.Noted",
+    "Preimage.Requested",
+    "Preimage.Cleared"
+  ],
+  "supportedCalls": [
+    "Democracy.propose",
+    "Democracy.second",
+    "Democracy.vote",
+    "Council.propose",
+    "Council.vote",
+    "Council.close",
+    "TechnicalCommittee.propose",
+    "TechnicalCommittee.vote",
+    "TechnicalCommittee.close"
+  ],
+  "dependencies": []
+}
