@@ -992,6 +992,34 @@ export function createApiServer(
     res.json({ extensions: registry.getExtensions() });
   });
 
+  /**
+   * @openapi
+   * /api/extensions/{extensionId}/backfill:
+   *   post:
+   *     tags: [Extensions]
+   *     summary: Trigger historical event backfill for an extension
+   *     description: Re-reads matching events from the events table and replays them through the extension handlers. Useful after deploying a new extension on an already-indexed chain.
+   *     parameters:
+   *       - in: path
+   *         name: extensionId
+   *         required: true
+   *         schema:
+   *           type: string
+   *     responses:
+   *       200:
+   *         description: Backfill triggered
+   *       404:
+   *         description: Extension not found
+   */
+  app.post("/api/extensions/:extensionId/backfill", async (req, res) => {
+    try {
+      const result = await registry.backfillById(req.params.extensionId);
+      res.json(result);
+    } catch (err) {
+      res.status(404).json({ error: String(err) });
+    }
+  });
+
   // ============================================================
   // Governance Extension API Endpoints
   // ============================================================
