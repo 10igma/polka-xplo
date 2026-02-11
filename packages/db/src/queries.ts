@@ -585,6 +585,61 @@ export async function getLatestTransfers(limit: number = 5): Promise<
   });
 }
 
+/**
+ * Get transfers (Balances.Transfer events) where the given address
+ * is either the sender or the receiver.
+ * Uses data->>from / data->>to JSON extraction on the events table.
+ */
+export async function getAccountTransfers(
+  address: string,
+  limit = 25,
+  offset = 0,
+): Promise<{
+  data: {
+    extrinsicId: string;
+    blockHeight: number;
+    timestamp: number | null;
+    amount: string;
+    from: string;
+    to: string;
+  }[];
+  total: number;
+}> {
+  const [dataRes, countRes] = await Promise.all([
+    query<Record<string, unknown>>(
+      `SELECT e.id as event_id, e.extrinsic_id, e.block_height, e.data,
+              b.timestamp
+       FROM events e
+       LEFT JOIN blocks b ON b.height = e.block_height
+       WHERE e.module = 'Balances' AND e.event IN ('Transfer', 'transfer')
+         AND (e.data->>'from' = $1 OR e.data->>'to' = $1)
+       ORDER BY e.block_height DESC, e.index DESC
+       LIMIT $2 OFFSET $3`,
+      [address, limit, offset],
+    ),
+    query<{ count: string }>(
+      `SELECT COUNT(*) AS count
+       FROM events
+       WHERE module = 'Balances' AND event IN ('Transfer', 'transfer')
+         AND (data->>'from' = $1 OR data->>'to' = $1)`,
+      [address],
+    ),
+  ]);
+  const data = dataRes.rows.map((row) => {
+    const d =
+      typeof row.data === "string" ? JSON.parse(row.data) : (row.data as Record<string, unknown>);
+    return {
+      extrinsicId: (row.extrinsic_id as string) ?? (row.event_id as string),
+      blockHeight: Number(row.block_height),
+      timestamp: row.timestamp ? Number(row.timestamp) : null,
+      amount: String(d.amount ?? d.value ?? "0"),
+      from: String(d.from ?? d.who ?? ""),
+      to: String(d.to ?? d.dest ?? ""),
+    };
+  });
+  return { data, total: parseInt(countRes.rows[0].count, 10) };
+}
+
 export async function searchByHash(
   hash: string,
 ): Promise<{ type: "block" | "extrinsic"; data: Block | Extrinsic } | null> {

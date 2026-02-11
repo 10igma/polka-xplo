@@ -22,6 +22,7 @@ import {
   searchByHash,
   getChainStats,
   getTransfersList,
+  getAccountTransfers,
   getDatabaseSize,
   getSpecVersions,
   getBlockHashForSpecVersion,
@@ -657,6 +658,64 @@ export function createApiServer(
       });
     } catch {
       res.status(500).json({ error: "Failed to fetch account" });
+    }
+  });
+
+  /**
+   * @openapi
+   * /api/accounts/{address}/transfers:
+   *   get:
+   *     tags: [Accounts]
+   *     summary: Get transfers for an account
+   *     description: Returns paginated Balances.Transfer events where the account is sender or receiver.
+   *     parameters:
+   *       - in: path
+   *         name: address
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: SS58 or hex address
+   *       - in: query
+   *         name: limit
+   *         schema:
+   *           type: integer
+   *           default: 25
+   *       - in: query
+   *         name: offset
+   *         schema:
+   *           type: integer
+   *           default: 0
+   *     responses:
+   *       200:
+   *         description: Paginated account transfers
+   *       400:
+   *         description: Invalid address
+   */
+  app.get("/api/accounts/:address/transfers", async (req, res) => {
+    try {
+      const { address } = req.params;
+      if (!address || address.length > 128) {
+        res.status(400).json({ error: "Invalid address format" });
+        return;
+      }
+      const hexKey = normalizeAddress(address);
+      if (!hexKey) {
+        res.status(400).json({ error: "Invalid address" });
+        return;
+      }
+      const limit = Math.min(Math.max(parseInt(req.query.limit as string) || 25, 1), 50);
+      const offset = Math.max(parseInt(req.query.offset as string) || 0, 0);
+      const result = await getAccountTransfers(hexKey, limit, offset);
+      const page = Math.floor(offset / limit) + 1;
+      res.json({
+        data: result.data,
+        total: result.total,
+        page,
+        pageSize: limit,
+        hasMore: offset + limit < result.total,
+      });
+    } catch {
+      res.status(500).json({ error: "Failed to fetch account transfers" });
     }
   });
 

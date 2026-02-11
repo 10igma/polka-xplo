@@ -1,5 +1,5 @@
 import { getAccount } from "@/lib/api";
-import { ExtrinsicList } from "@/components/ExtrinsicList";
+import { AccountActivity } from "@/components/AccountActivity";
 import { AddressDisplay } from "@/components/AddressDisplay";
 import { formatBalance } from "@/lib/format";
 import { theme } from "@/lib/theme";
@@ -100,20 +100,8 @@ export default async function AccountPage({ params }: { params: Promise<{ addres
         />
       </div>
 
-      {/* Transactions tab */}
-      <section>
-        <div className="flex gap-1 mb-4 border-b border-zinc-800">
-          <span className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-zinc-100 border-b-2 border-[var(--color-accent)] -mb-px">
-            Extrinsics
-            <span className="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-xs font-medium bg-zinc-700 text-zinc-200">
-              {recentExtrinsics.length}
-            </span>
-          </span>
-        </div>
-        <div className="card">
-          <ExtrinsicList extrinsics={recentExtrinsics} />
-        </div>
-      </section>
+      {/* Activity tabs: Extrinsics + Transfers */}
+      <AccountActivity address={address} extrinsics={recentExtrinsics} />
     </div>
   );
 }
