@@ -108,6 +108,8 @@ export class PluginRegistry {
 
   /** Run pending SQL migrations for all extensions */
   async runMigrations(): Promise<void> {
+    const newlyMigrated: PalletExtension[] = [];
+
     for (const [, ext] of this.extensions) {
       if (!ext.getMigrationSQL) continue;
 
@@ -131,7 +133,96 @@ export class PluginRegistry {
       ]);
 
       console.log(`[Registry] Migration complete: ${migrationKey}`);
+      newlyMigrated.push(ext);
     }
+
+    // Backfill historical events for newly-migrated extensions
+    for (const ext of newlyMigrated) {
+      await this.backfillExtension(ext);
+    }
+  }
+
+  /**
+   * Backfill historical events for a newly-registered extension.
+   * Reads matching events from the existing `events` table and replays
+   * them through the extension's onEvent handler.
+   */
+  private async backfillExtension(ext: PalletExtension): Promise<{ processed: number; total: number }> {
+    if (!ext.onEvent || ext.manifest.supportedEvents.length === 0) return { processed: 0, total: 0 };
+
+    // Build list of (module, event) pairs from the manifest's supportedEvents
+    // Format is "Module.EventName"
+    const pairs = ext.manifest.supportedEvents.map((key) => {
+      const [mod, evt] = key.split(".");
+      return { module: mod, event: evt };
+    });
+
+    // Build a WHERE clause: (module = $1 AND event = $2) OR (module = $3 AND event = $4) ...
+    const conditions: string[] = [];
+    const params: string[] = [];
+    for (const p of pairs) {
+      params.push(p.module, p.event);
+      conditions.push(`(module = $${params.length - 1} AND event = $${params.length})`);
+    }
+
+    const sql = `SELECT id, block_height, extrinsic_id, index, module, event, data,
+                        phase_type, phase_index
+                 FROM events
+                 WHERE ${conditions.join(" OR ")}
+                 ORDER BY block_height ASC, index ASC`;
+
+    const result = await query(sql, params);
+    const total = result.rows.length;
+
+    if (total === 0) {
+      console.log(`[Registry] Backfill ${ext.manifest.name}: no historical events found`);
+      return { processed: 0, total: 0 };
+    }
+
+    console.log(`[Registry] Backfilling ${ext.manifest.name}: ${total} historical events...`);
+
+    let processed = 0;
+    for (const row of result.rows) {
+      const ctx: BlockContext = {
+        blockHeight: Number(row.block_height),
+        blockHash: "",
+        timestamp: null,
+        specVersion: 0,
+      };
+
+      const phase =
+        row.phase_type === "ApplyExtrinsic"
+          ? { type: "ApplyExtrinsic" as const, index: Number(row.phase_index) }
+          : row.phase_type === "Finalization"
+            ? { type: "Finalization" as const }
+            : { type: "Initialization" as const };
+
+      const event: ExplorerEvent = {
+        id: String(row.id),
+        blockHeight: Number(row.block_height),
+        extrinsicId: row.extrinsic_id ? String(row.extrinsic_id) : null,
+        index: Number(row.index),
+        module: String(row.module),
+        event: String(row.event),
+        data: row.data as Record<string, unknown>,
+        phase,
+      };
+
+      try {
+        await ext.onEvent!(ctx, event);
+        processed++;
+      } catch (err) {
+        console.error(
+          `[Registry] Backfill error in ${ext.manifest.name} at event ${event.id}:`,
+          err,
+        );
+      }
+    }
+
+    console.log(
+      `[Registry] Backfill complete for ${ext.manifest.name}: ${processed}/${total} events processed`,
+    );
+    return { processed, total };
   }
 
   /** Invoke all onBlock handlers */
@@ -187,5 +278,12 @@ export class PluginRegistry {
   /** Check if an extension is registered for a specific event */
   hasHandlerForEvent(module: string, event: string): boolean {
     return this.eventIndex.has(`${module}.${event}`);
+  }
+
+  /** Trigger backfill for a specific extension by ID (for manual / API use) */
+  async backfillById(extensionId: string): Promise<{ processed: number; total: number }> {
+    const ext = this.extensions.get(extensionId);
+    if (!ext) throw new Error(`Extension not found: ${extensionId}`);
+    return this.backfillExtension(ext);
   }
 }
