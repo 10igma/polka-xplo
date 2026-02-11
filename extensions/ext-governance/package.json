@@ -1,0 +1,20 @@
+{
+  "name": "@polka-xplo/ext-governance",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/indexer/event-handlers.js",
+  "scripts": {
+    "build": "tsc",
+    "lint": "tsc --noEmit && eslint ."
+  },
+  "dependencies": {
+    "@polka-xplo/shared": "*",
+    "@polka-xplo/db": "*"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.0",
+    "react": "^19.0.0",
+    "typescript": "^5.7.0"
+  }
+}

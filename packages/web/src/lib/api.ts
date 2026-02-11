@@ -350,3 +350,118 @@ export interface LogsResponse {
 export async function getLogs(limit = 25, offset = 0): Promise<LogsResponse> {
   return fetchJson(`/api/logs?limit=${limit}&offset=${offset}`);
 }
+
+// ---- Governance ----
+
+export interface GovernanceReferendum {
+  ref_index: number;
+  block_height: number;
+  threshold: string | null;
+  status: string;
+  end_block: number | null;
+  vote_count: string;
+  aye_count: string;
+  nay_count: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface GovernanceVote {
+  id: number;
+  ref_index?: number;
+  proposal_hash?: string;
+  block_height: number;
+  voter: string;
+  is_aye: boolean;
+  conviction?: number;
+  balance?: string;
+  created_at: string;
+}
+
+export interface GovernanceProposal {
+  proposal_index: number;
+  block_height: number;
+  deposit: string;
+  status: string;
+  referendum_index: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface GovernanceMotion {
+  proposal_index: number;
+  proposal_hash: string;
+  block_height: number;
+  proposer: string;
+  threshold: number;
+  aye_count: number;
+  nay_count: number;
+  status: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface GovernanceSummary {
+  referenda: Record<string, number>;
+  proposals: Record<string, number>;
+  council: Record<string, number>;
+  techcomm: Record<string, number>;
+}
+
+export async function getGovernanceSummary(): Promise<GovernanceSummary> {
+  return fetchJson("/api/governance/summary");
+}
+
+export async function getReferenda(
+  limit = 25,
+  offset = 0,
+  status?: string,
+): Promise<{ data: GovernanceReferendum[]; total: number }> {
+  const params = `limit=${limit}&offset=${offset}${status ? `&status=${status}` : ""}`;
+  return fetchJson(`/api/governance/referenda?${params}`);
+}
+
+export async function getReferendum(
+  refIndex: number,
+): Promise<{ referendum: GovernanceReferendum; votes: GovernanceVote[] }> {
+  return fetchJson(`/api/governance/referenda/${refIndex}`);
+}
+
+export async function getDemocracyProposals(
+  limit = 25,
+  offset = 0,
+  status?: string,
+): Promise<{ data: GovernanceProposal[]; total: number }> {
+  const params = `limit=${limit}&offset=${offset}${status ? `&status=${status}` : ""}`;
+  return fetchJson(`/api/governance/proposals?${params}`);
+}
+
+export async function getCouncilMotions(
+  limit = 25,
+  offset = 0,
+  status?: string,
+): Promise<{ data: GovernanceMotion[]; total: number }> {
+  const params = `limit=${limit}&offset=${offset}${status ? `&status=${status}` : ""}`;
+  return fetchJson(`/api/governance/council/motions?${params}`);
+}
+
+export async function getCouncilMotion(
+  index: number,
+): Promise<{ motion: GovernanceMotion; votes: GovernanceVote[] }> {
+  return fetchJson(`/api/governance/council/motions/${index}`);
+}
+
+export async function getTechCommProposals(
+  limit = 25,
+  offset = 0,
+  status?: string,
+): Promise<{ data: GovernanceMotion[]; total: number }> {
+  const params = `limit=${limit}&offset=${offset}${status ? `&status=${status}` : ""}`;
+  return fetchJson(`/api/governance/techcomm/proposals?${params}`);
+}
+
+export async function getTechCommProposal(
+  index: number,
+): Promise<{ proposal: GovernanceMotion; votes: GovernanceVote[] }> {
+  return fetchJson(`/api/governance/techcomm/proposals/${index}`);
+}
