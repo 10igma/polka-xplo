@@ -18,7 +18,8 @@ export default async function EventsPage({
   const page = Math.max(parseInt(params.page ?? "1", 10) || 1, 1);
   const offset = (page - 1) * pageSize;
   const module = params.module || undefined;
-  const eventName = params.event || undefined;
+  const eventParam = params.event || undefined;
+  const eventNames = eventParam ? eventParam.split(",").filter(Boolean) : undefined;
 
   let events: EventsResponse | null = null;
   let moduleList: { module: string; events: string[] }[] = [];
@@ -26,7 +27,7 @@ export default async function EventsPage({
 
   try {
     const [eventsRes, modulesRes] = await Promise.all([
-      getEvents(pageSize, offset, module, eventName),
+      getEvents(pageSize, offset, module, eventNames),
       getEventModules(),
     ]);
     events = eventsRes;
@@ -36,7 +37,7 @@ export default async function EventsPage({
   }
 
   const totalPages = events ? Math.ceil(events.total / pageSize) : 0;
-  const filterLabel = [module, eventName].filter(Boolean).join(".");
+  const filterLabel = [module, eventNames?.join(", ")].filter(Boolean).join(": ");
 
   return (
     <div className="space-y-4">
@@ -70,7 +71,7 @@ export default async function EventsPage({
             basePath="/events"
             extraParams={{
               ...(module ? { module } : {}),
-              ...(eventName ? { event: eventName } : {}),
+              ...(eventParam ? { event: eventParam } : {}),
             }}
           />
         </>

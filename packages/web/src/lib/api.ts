@@ -131,11 +131,11 @@ export async function getEvents(
   limit = 25,
   offset = 0,
   module?: string,
-  event?: string,
+  eventNames?: string[],
 ): Promise<EventsResponse> {
   let params = `limit=${limit}&offset=${offset}`;
   if (module) params += `&module=${encodeURIComponent(module)}`;
-  if (event) params += `&event=${encodeURIComponent(event)}`;
+  if (eventNames && eventNames.length > 0) params += `&event=${encodeURIComponent(eventNames.join(","))}`;
   return fetchJson(`/api/events?${params}`);
 }
 

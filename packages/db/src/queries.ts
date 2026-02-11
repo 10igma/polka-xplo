@@ -250,7 +250,7 @@ export async function getEventsList(
   limit = 25,
   offset = 0,
   module?: string,
-  eventName?: string,
+  eventNames?: string[],
 ): Promise<{ data: ExplorerEvent[]; total: number }> {
   const conditions: string[] = [];
   const dataParams: unknown[] = [limit, offset];
@@ -261,10 +261,13 @@ export async function getEventsList(
     countParams.push(module);
     conditions.push(`module = $${dataParams.length}`);
   }
-  if (eventName) {
-    dataParams.push(eventName);
-    countParams.push(eventName);
-    conditions.push(`event = $${dataParams.length}`);
+  if (eventNames && eventNames.length > 0) {
+    const placeholders = eventNames.map((e) => {
+      dataParams.push(e);
+      countParams.push(e);
+      return `$${dataParams.length}`;
+    });
+    conditions.push(`event IN (${placeholders.join(", ")})`);
   }
 
   const whereData = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : ``;
@@ -272,7 +275,10 @@ export async function getEventsList(
   const countConditions: string[] = [];
   let ci = 0;
   if (module) countConditions.push(`module = $${++ci}`);
-  if (eventName) countConditions.push(`event = $${++ci}`);
+  if (eventNames && eventNames.length > 0) {
+    const cp = eventNames.map(() => `$${++ci}`);
+    countConditions.push(`event IN (${cp.join(", ")})`);
+  }
   const whereCount = countConditions.length > 0 ? `WHERE ${countConditions.join(" AND ")}` : ``;
 
   const [dataRes, countRes] = await Promise.all([

@@ -1,19 +1,25 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import type { EventModuleInfo } from "@/lib/api";
 
 /**
  * Dynamic event filter with cascading module → event dropdowns.
- * Uses actual indexed data to populate options.
+ * Module is single-select; event types support multi-select with checkboxes.
  */
 export function EventFilter({ modules }: { modules: EventModuleInfo[] }) {
   const router = useRouter();
   const searchParams = useSearchParams();
 
   const currentModule = searchParams.get("module") ?? "";
-  const currentEvent = searchParams.get("event") ?? "";
+  const currentEventParam = searchParams.get("event") ?? "";
+
+  // Parse comma-separated event params into a Set for O(1) lookup
+  const selectedEvents = useMemo(
+    () => new Set(currentEventParam.split(",").filter(Boolean)),
+    [currentEventParam],
+  );
 
   const [moduleOpen, setModuleOpen] = useState(false);
   const [eventOpen, setEventOpen] = useState(false);
@@ -39,18 +45,39 @@ export function EventFilter({ modules }: { modules: EventModuleInfo[] }) {
   }, []);
 
   const navigate = useCallback(
-    (module: string, event: string) => {
+    (module: string, events: string[]) => {
       const params = new URLSearchParams();
       if (module) params.set("module", module);
-      if (event) params.set("event", event);
+      if (events.length > 0) params.set("event", events.join(","));
       router.push(`/events${params.toString() ? `?${params.toString()}` : ""}`);
     },
     [router],
   );
 
+  /** Toggle a single event in the multi-select */
+  const toggleEvent = useCallback(
+    (evt: string) => {
+      const next = new Set(selectedEvents);
+      if (next.has(evt)) {
+        next.delete(evt);
+      } else {
+        next.add(evt);
+      }
+      navigate(currentModule, Array.from(next));
+    },
+    [selectedEvents, currentModule, navigate],
+  );
+
+  /** Button label for event dropdown */
+  const eventLabel = useMemo(() => {
+    if (selectedEvents.size === 0) return "All Events";
+    if (selectedEvents.size === 1) return Array.from(selectedEvents)[0];
+    return `${selectedEvents.size} events selected`;
+  }, [selectedEvents]);
+
   return (
     <div className="flex items-center gap-3 flex-wrap">
-      {/* Module dropdown */}
+      {/* Module dropdown — single select */}
       <div ref={moduleRef} className="relative">
         <button
           onClick={() => {
@@ -79,7 +106,7 @@ export function EventFilter({ modules }: { modules: EventModuleInfo[] }) {
           <div className="absolute top-full left-0 mt-1 w-56 max-h-80 overflow-y-auto rounded-lg border border-zinc-700/50 bg-zinc-900 shadow-xl shadow-black/40 py-1 z-50">
             <button
               onClick={() => {
-                navigate("", "");
+                navigate("", []);
                 setModuleOpen(false);
               }}
               className={`block w-full text-left px-4 py-2 text-sm transition-colors ${
@@ -94,7 +121,7 @@ export function EventFilter({ modules }: { modules: EventModuleInfo[] }) {
               <button
                 key={m.module}
                 onClick={() => {
-                  navigate(m.module, "");
+                  navigate(m.module, []);
                   setModuleOpen(false);
                 }}
                 className={`block w-full text-left px-4 py-2 text-sm transition-colors ${
@@ -111,7 +138,7 @@ export function EventFilter({ modules }: { modules: EventModuleInfo[] }) {
         )}
       </div>
 
-      {/* Event type dropdown — only shown when a module is selected */}
+      {/* Event type dropdown — multi-select with checkboxes */}
       {currentModule && availableEvents.length > 0 && (
         <div ref={eventRef} className="relative">
           <button
@@ -120,12 +147,17 @@ export function EventFilter({ modules }: { modules: EventModuleInfo[] }) {
               setModuleOpen(false);
             }}
             className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm border transition-colors ${
-              currentEvent
+              selectedEvents.size > 0
                 ? "bg-accent/10 text-accent border-accent/30"
                 : "bg-zinc-800/60 text-zinc-400 border-zinc-700/50 hover:text-zinc-200"
             }`}
           >
-            <span>{currentEvent || "All Events"}</span>
+            <span>{eventLabel}</span>
+            {selectedEvents.size > 1 && (
+              <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-accent/20 text-accent text-xs font-medium">
+                {selectedEvents.size}
+              </span>
+            )}
             <svg
               className={`w-3.5 h-3.5 transition-transform ${eventOpen ? "rotate-180" : ""}`}
               fill="none"
@@ -139,44 +171,71 @@ export function EventFilter({ modules }: { modules: EventModuleInfo[] }) {
 
           {eventOpen && (
             <div className="absolute top-full left-0 mt-1 w-56 max-h-80 overflow-y-auto rounded-lg border border-zinc-700/50 bg-zinc-900 shadow-xl shadow-black/40 py-1 z-50">
+              {/* Select all / clear header */}
               <button
-                onClick={() => {
-                  navigate(currentModule, "");
-                  setEventOpen(false);
-                }}
+                onClick={() => navigate(currentModule, [])}
                 className={`block w-full text-left px-4 py-2 text-sm transition-colors ${
-                  !currentEvent
+                  selectedEvents.size === 0
                     ? "text-accent bg-accent/10"
                     : "text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800/60"
                 }`}
               >
                 All Events
               </button>
-              {availableEvents.map((evt) => (
-                <button
-                  key={evt}
-                  onClick={() => {
-                    navigate(currentModule, evt);
-                    setEventOpen(false);
-                  }}
-                  className={`block w-full text-left px-4 py-2 text-sm transition-colors ${
-                    currentEvent === evt
-                      ? "text-accent bg-accent/10"
-                      : "text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800/60"
-                  }`}
-                >
-                  {evt}
-                </button>
-              ))}
+              <div className="border-t border-zinc-800 my-1" />
+              {availableEvents.map((evt) => {
+                const checked = selectedEvents.has(evt);
+                return (
+                  <button
+                    key={evt}
+                    onClick={() => toggleEvent(evt)}
+                    className={`flex items-center gap-2.5 w-full text-left px-4 py-2 text-sm transition-colors ${
+                      checked
+                        ? "text-accent bg-accent/5"
+                        : "text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800/60"
+                    }`}
+                  >
+                    {/* Checkbox indicator */}
+                    <span
+                      className={`flex items-center justify-center w-4 h-4 rounded border text-xs transition-colors ${
+                        checked
+                          ? "bg-accent/20 border-accent/50 text-accent"
+                          : "border-zinc-600 text-transparent"
+                      }`}
+                    >
+                      ✓
+                    </span>
+                    <span>{evt}</span>
+                  </button>
+                );
+              })}
             </div>
           )}
         </div>
       )}
 
+      {/* Selected event tags — quick deselect chips */}
+      {selectedEvents.size > 0 &&
+        Array.from(selectedEvents).map((evt) => (
+          <span
+            key={evt}
+            className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-accent/10 text-accent text-xs border border-accent/20"
+          >
+            {evt}
+            <button
+              onClick={() => toggleEvent(evt)}
+              className="hover:text-white transition-colors"
+              aria-label={`Remove ${evt} filter`}
+            >
+              ✕
+            </button>
+          </span>
+        ))}
+
       {/* Clear all filters */}
-      {(currentModule || currentEvent) && (
+      {(currentModule || selectedEvents.size > 0) && (
         <button
-          onClick={() => navigate("", "")}
+          onClick={() => navigate("", [])}
           className="px-2 py-1.5 rounded-lg text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
         >
           ✕ Clear

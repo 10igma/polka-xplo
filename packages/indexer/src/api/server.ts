@@ -842,8 +842,9 @@ export function createApiServer(
       const limit = Math.min(Math.max(parseInt(req.query.limit as string) || 25, 1), 100);
       const offset = Math.max(parseInt(req.query.offset as string) || 0, 0);
       const module = req.query.module as string | undefined;
-      const event = req.query.event as string | undefined;
-      const result = await getEventsList(limit, offset, module || undefined, event || undefined);
+      const eventParam = req.query.event as string | undefined;
+      const eventNames = eventParam ? eventParam.split(",").map((e) => e.trim()).filter(Boolean) : undefined;
+      const result = await getEventsList(limit, offset, module || undefined, eventNames);
       const page = Math.floor(offset / limit) + 1;
       res.json({
         data: result.data,
