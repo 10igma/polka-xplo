@@ -1266,31 +1266,35 @@ export function createApiServer(
    * /api/maintenance/vacuum:
    *   post:
    *     tags: [Admin]
-   *     summary: Run VACUUM ANALYZE on main tables
+   *     summary: Run VACUUM FULL ANALYZE on main tables
    *     description: |
    *       Reclaims disk space after large truncation operations
-   *       and updates planner statistics. May take several minutes.
+   *       and updates planner statistics.
+   *       Uses VACUUM FULL to actually shrink files on disk.
+   *       WARNING: Locks tables during operation — may take 10-30 minutes.
    *     responses:
    *       200:
    *         description: Vacuum results
    */
   app.post("/api/maintenance/vacuum", async (_req, res) => {
     try {
-      console.log("[Maintenance] Starting VACUUM ANALYZE on extrinsics...");
+      console.log("[Maintenance] Starting VACUUM FULL ANALYZE on extrinsics...");
       const start = Date.now();
-      await query("VACUUM ANALYZE extrinsics", []);
+      await query("VACUUM FULL ANALYZE extrinsics", []);
       const extTime = Date.now() - start;
-      console.log(`[Maintenance] extrinsics done in ${extTime}ms`);
+      console.log(`[Maintenance] extrinsics done in ${(extTime / 1000).toFixed(1)}s`);
 
+      console.log("[Maintenance] Starting VACUUM FULL ANALYZE on events...");
       const start2 = Date.now();
-      await query("VACUUM ANALYZE events", []);
+      await query("VACUUM FULL ANALYZE events", []);
       const evtTime = Date.now() - start2;
-      console.log(`[Maintenance] events done in ${evtTime}ms`);
+      console.log(`[Maintenance] events done in ${(evtTime / 1000).toFixed(1)}s`);
 
+      console.log("[Maintenance] Starting VACUUM FULL ANALYZE on blocks...");
       const start3 = Date.now();
-      await query("VACUUM ANALYZE blocks", []);
+      await query("VACUUM FULL ANALYZE blocks", []);
       const blkTime = Date.now() - start3;
-      console.log(`[Maintenance] blocks done in ${blkTime}ms`);
+      console.log(`[Maintenance] blocks done in ${(blkTime / 1000).toFixed(1)}s`);
 
       const sizeResult = await getDatabaseSize();
       res.json({
