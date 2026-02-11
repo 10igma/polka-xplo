@@ -1,0 +1,185 @@
+# Deployment
+
+## Docker Compose (Recommended)
+
+### Default (Polkadot)
+
+```bash
+docker compose up -d
+```
+
+### Ajuna Network
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.ajuna.yml up -d
+```
+
+### Custom Chain
+
+Create a compose override (see [Configuration > Docker Compose Overrides](configuration.md#docker-compose-overrides)):
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.mychain.yml up -d
+```
+
+---
+
+## Services
+
+| Service            | Image            | Port | Description                       |
+| ------------------ | ---------------- | ---- | --------------------------------- |
+| `explorer-db`      | postgres:16      | 5432 | PostgreSQL (persistent volume)    |
+| `explorer-redis`   | redis:7          | 6379 | Redis (job queue)                 |
+| `explorer-indexer`  | Custom (node:20) | 3001 | Block processor + REST API        |
+| `explorer-web`     | Custom (node:20) | 3000 | Next.js frontend (standalone)     |
+
+### Health Checks
+
+Both Postgres and Redis have built-in health checks. The indexer and web containers wait for `service_healthy` before starting.
+
+---
+
+## Stopping and Restarting
+
+### Stop (preserve data)
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.ajuna.yml down
+```
+
+This stops all containers. **Data is preserved** in Docker volumes (`pgdata`, `redisdata`).
+
+### Restart
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.ajuna.yml up -d
+```
+
+The indexer will:
+1. Query the DB for the last finalized block height
+2. Query the chain for the current tip
+3. Backfill any missed blocks
+4. Resume live syncing
+
+### Full rebuild (new code)
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.ajuna.yml up -d --build
+```
+
+### Reset everything (wipe data)
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.ajuna.yml down -v
+docker compose -f docker-compose.yml -f docker-compose.ajuna.yml up -d --build
+```
+
+The `-v` flag removes Docker volumes, wiping the database and Redis. The indexer will start syncing from block 0.
+
+> **Important:** `down` = safe, `down -v` = deletes all indexed data. Never use `-v` unless you want a fresh start.
+
+---
+
+## Data Safety
+
+The indexer is designed for safe interruption:
+
+- **Transactional writes** — Every block is written in a single PostgreSQL transaction. If the process is killed mid-block, nothing partial is committed.
+- **Idempotent upserts** — All inserts use `ON CONFLICT DO UPDATE`, so re-processing a block produces the same result.
+- **Automatic backfill** — On restart, the indexer detects the gap between DB height and chain tip and fills it automatically.
+- **Fork pruning** — Best-head blocks from abandoned forks are cleaned up when the finalized chain advances.
+
+---
+
+## Resource Requirements
+
+### Minimum (development / small chains)
+
+- 2 CPU cores
+- 2 GB RAM
+- 10 GB disk
+
+### Recommended (production / large chains)
+
+- 4+ CPU cores
+- 8 GB RAM
+- 100+ GB SSD (Polkadot mainnet generates ~2 GB/million blocks)
+
+### RPC Endpoints
+
+For production, use 2-3 RPC endpoints for redundancy:
+
+```bash
+ARCHIVE_NODE_URL=wss://rpc1.example.com,wss://rpc2.example.com,wss://rpc3.example.com
+```
+
+Monitor health via `GET /api/rpc-health`.
+
+---
+
+## Monitoring
+
+### Health Endpoint
+
+```bash
+curl http://localhost:3001/health
+```
+
+Returns `"status": "healthy"` with sync lag, DB connectivity, and chain tip.
+
+### Indexer Metrics
+
+```bash
+curl http://localhost:3001/api/indexer-status
+```
+
+Returns blocks/minute, blocks/hour, ETA, error count, memory usage, and database size.
+
+### Docker Logs
+
+```bash
+# All services
+docker compose -f docker-compose.yml -f docker-compose.ajuna.yml logs -f
+
+# Indexer only
+docker compose -f docker-compose.yml -f docker-compose.ajuna.yml logs -f explorer-indexer
+
+# Last 100 lines
+docker compose -f docker-compose.yml -f docker-compose.ajuna.yml logs --tail 100 explorer-indexer
+```
+
+---
+
+## Indexing Multiple Chains
+
+To index multiple chains simultaneously, run multiple indexer instances with different `CHAIN_ID` values pointing at the same database:
+
+```yaml
+# docker-compose.multi.yml
+services:
+  indexer-polkadot:
+    extends:
+      service: explorer-indexer
+    environment:
+      CHAIN_ID: polkadot
+      ARCHIVE_NODE_URL: wss://rpc.polkadot.io
+      API_PORT: "3001"
+    ports:
+      - "3001:3001"
+
+  indexer-kusama:
+    extends:
+      service: explorer-indexer
+    environment:
+      CHAIN_ID: kusama
+      ARCHIVE_NODE_URL: wss://kusama-rpc.polkadot.io
+      API_PORT: "3002"
+    ports:
+      - "3002:3002"
+```
+
+Each indexer stores data in the same Postgres database using `chain_id` scoping.
+
+---
+
+**Next:** [Configuration](configuration.md) · [Troubleshooting](troubleshooting.md)
