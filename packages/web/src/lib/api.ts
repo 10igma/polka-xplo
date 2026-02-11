@@ -171,6 +171,14 @@ export async function getAccount(address: string): Promise<AccountDetail> {
   return fetchJson(`/api/accounts/${address}`);
 }
 
+export async function getAccountTransfers(
+  address: string,
+  limit = 25,
+  offset = 0,
+): Promise<TransfersResponse> {
+  return fetchJson(`/api/accounts/${address}/transfers?limit=${limit}&offset=${offset}`);
+}
+
 // ---- Accounts List ----
 
 export interface AccountListItem {

@@ -22,6 +22,7 @@ import {
   searchByHash,
   getChainStats,
   getTransfersList,
+  getAccountTransfers,
   getDatabaseSize,
   getSpecVersions,
   getBlockHashForSpecVersion,
@@ -29,6 +30,7 @@ import {
   query,
   getEventModules,
   dbMetrics,
+  getBrokenExtrinsicBlocks,
 } from "@polka-xplo/db";
 import { detectSearchType, normalizeAddress } from "@polka-xplo/shared";
 import { metrics } from "../metrics.js";
@@ -662,6 +664,64 @@ export function createApiServer(
 
   /**
    * @openapi
+   * /api/accounts/{address}/transfers:
+   *   get:
+   *     tags: [Accounts]
+   *     summary: Get transfers for an account
+   *     description: Returns paginated Balances.Transfer events where the account is sender or receiver.
+   *     parameters:
+   *       - in: path
+   *         name: address
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: SS58 or hex address
+   *       - in: query
+   *         name: limit
+   *         schema:
+   *           type: integer
+   *           default: 25
+   *       - in: query
+   *         name: offset
+   *         schema:
+   *           type: integer
+   *           default: 0
+   *     responses:
+   *       200:
+   *         description: Paginated account transfers
+   *       400:
+   *         description: Invalid address
+   */
+  app.get("/api/accounts/:address/transfers", async (req, res) => {
+    try {
+      const { address } = req.params;
+      if (!address || address.length > 128) {
+        res.status(400).json({ error: "Invalid address format" });
+        return;
+      }
+      const hexKey = normalizeAddress(address);
+      if (!hexKey) {
+        res.status(400).json({ error: "Invalid address" });
+        return;
+      }
+      const limit = Math.min(Math.max(parseInt(req.query.limit as string) || 25, 1), 50);
+      const offset = Math.max(parseInt(req.query.offset as string) || 0, 0);
+      const result = await getAccountTransfers(hexKey, limit, offset);
+      const page = Math.floor(offset / limit) + 1;
+      res.json({
+        data: result.data,
+        total: result.total,
+        page,
+        pageSize: limit,
+        hasMore: offset + limit < result.total,
+      });
+    } catch {
+      res.status(500).json({ error: "Failed to fetch account transfers" });
+    }
+  });
+
+  /**
+   * @openapi
    * /api/stats:
    *   get:
    *     tags: [Stats]
@@ -1058,6 +1118,90 @@ export function createApiServer(
       res.json(result);
     } catch (err) {
       res.status(404).json({ error: String(err) });
+    }
+  });
+
+  // ============================================================
+  // Repair Endpoint — re-decode broken extrinsics
+  // ============================================================
+
+  /**
+   * @openapi
+   * /api/repair/extrinsics:
+   *   post:
+   *     tags: [Admin]
+   *     summary: Repair mis-decoded extrinsics
+   *     description: |
+   *       Finds extrinsics with placeholder module/call names (e.g. "Pallet(217)", "call(56)")
+   *       caused by decoder bugs, re-fetches the block from RPC, re-decodes the extrinsics,
+   *       and updates the DB rows.
+   *     responses:
+   *       200:
+   *         description: Repair results
+   */
+  app.post("/api/repair/extrinsics", async (_req, res) => {
+    if (!rpcPool) {
+      res.status(503).json({ error: "RPC pool not available" });
+      return;
+    }
+    try {
+      const { ExtrinsicDecoder } = await import("../ingestion/extrinsic-decoder.js");
+      const decoder = new ExtrinsicDecoder(rpcPool);
+
+      // Find blocks with broken extrinsic names
+      const brokenBlocks = await getBrokenExtrinsicBlocks(2000);
+      if (brokenBlocks.length === 0) {
+        res.json({ message: "No broken extrinsics found", repaired: 0 });
+        return;
+      }
+
+      console.log(`[Repair] Found ${brokenBlocks.length} blocks with broken extrinsic names`);
+      let totalRepaired = 0;
+      let errors = 0;
+
+      for (const height of brokenBlocks) {
+        try {
+          // Get block hash
+          const blockHash: string = await rpcPool.call("chain_getBlockHash", [height]);
+          if (!blockHash) { errors++; continue; }
+
+          // Fetch full block
+          const blockData = await rpcPool.call<{
+            block: { extrinsics: string[] };
+          }>("chain_getBlock", [blockHash]);
+          if (!blockData?.block?.extrinsics) { errors++; continue; }
+
+          // Ensure metadata is loaded for this block's runtime
+          const { lookup } = await decoder.ensureMetadata(blockHash);
+
+          // Re-decode each extrinsic and update
+          for (let i = 0; i < blockData.block.extrinsics.length; i++) {
+            const hex = blockData.block.extrinsics[i];
+            const decoded = decoder.decodeCallInfo(hex, lookup);
+            const extId = `${height}-${i}`;
+
+            await query(
+              `UPDATE extrinsics SET module = $1, call = $2 WHERE id = $3`,
+              [decoded.module, decoded.call, extId],
+            );
+          }
+
+          totalRepaired++;
+        } catch (err) {
+          console.error(`[Repair] Failed to repair block ${height}:`, err);
+          errors++;
+        }
+      }
+
+      console.log(`[Repair] Done: ${totalRepaired} blocks repaired, ${errors} errors`);
+      res.json({
+        blocksFound: brokenBlocks.length,
+        blocksRepaired: totalRepaired,
+        errors,
+      });
+    } catch (err) {
+      console.error("[Repair] Failed:", err);
+      res.status(500).json({ error: "Repair failed" });
     }
   });
 
