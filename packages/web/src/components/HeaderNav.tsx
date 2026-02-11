@@ -73,7 +73,6 @@ export function HeaderNav({ apiDocsUrl }: { apiDocsUrl: string }) {
     { href: "/transfers", label: "Transfers" },
     { href: "/accounts", label: "Accounts" },
     { href: "/events", label: "Events" },
-    { href: "/assets", label: "Assets" },
     { href: "/logs", label: "Logs" },
     { href: "/runtime", label: "Runtime" },
   ];
@@ -90,6 +89,9 @@ export function HeaderNav({ apiDocsUrl }: { apiDocsUrl: string }) {
     <nav className="hidden sm:flex items-center gap-4 text-sm text-zinc-400">
       <NavDropdown label="Blockchain" links={blockchainLinks} />
       <NavDropdown label="Governance" links={governanceLinks} />
+      <a href="/assets" className="hover:text-zinc-100 transition-colors">
+        Assets
+      </a>
       <a href="/chain-state/System/Account" className="hover:text-zinc-100 transition-colors">
         Chain State
       </a>
