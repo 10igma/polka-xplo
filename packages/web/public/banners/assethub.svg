@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 220" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#061a10"/>
+      <stop offset="50%" stop-color="#0a2618"/>
+      <stop offset="100%" stop-color="#0d0d0d"/>
+    </linearGradient>
+    <radialGradient id="glow1" cx="25%" cy="45%" r="40%">
+      <stop offset="0%" stop-color="#48CC81" stop-opacity="0.2"/>
+      <stop offset="100%" stop-color="transparent" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="glow2" cx="70%" cy="50%" r="35%">
+      <stop offset="0%" stop-color="#56F39A" stop-opacity="0.12"/>
+      <stop offset="100%" stop-color="transparent" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="glow3" cx="95%" cy="25%" r="20%">
+      <stop offset="0%" stop-color="#48CC81" stop-opacity="0.1"/>
+      <stop offset="100%" stop-color="transparent" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1440" height="220" fill="url(#bg)"/>
+  <rect width="1440" height="220" fill="url(#glow1)"/>
+  <rect width="1440" height="220" fill="url(#glow2)"/>
+  <rect width="1440" height="220" fill="url(#glow3)"/>
+  <!-- Asset Hub grid / vault pattern -->
+  <g opacity="0.06" stroke="#48CC81" stroke-width="0.8" fill="none">
+    <rect x="80" y="30" width="60" height="60" rx="4"/>
+    <rect x="180" y="50" width="45" height="45" rx="3"/>
+    <rect x="300" y="25" width="70" height="70" rx="5"/>
+    <rect x="430" y="40" width="50" height="50" rx="3"/>
+    <rect x="550" y="30" width="65" height="65" rx="4"/>
+    <rect x="680" y="45" width="55" height="55" rx="4"/>
+    <rect x="810" y="25" width="60" height="60" rx="4"/>
+    <rect x="940" y="35" width="50" height="50" rx="3"/>
+    <rect x="1060" y="30" width="70" height="70" rx="5"/>
+    <rect x="1190" y="45" width="55" height="55" rx="4"/>
+    <rect x="1310" y="30" width="60" height="60" rx="4"/>
+  </g>
+  <!-- Small asset tokens -->
+  <g opacity="0.08" fill="#48CC81">
+    <circle cx="110" cy="150" r="8"/>
+    <circle cx="260" cy="140" r="6"/>
+    <circle cx="420" cy="155" r="10"/>
+    <circle cx="580" cy="145" r="7"/>
+    <circle cx="740" cy="160" r="9"/>
+    <circle cx="900" cy="140" r="6"/>
+    <circle cx="1060" cy="150" r="8"/>
+    <circle cx="1220" cy="145" r="7"/>
+    <circle cx="1380" cy="155" r="6"/>
+  </g>
+  <!-- Connecting flow lines -->
+  <g opacity="0.04" stroke="#48CC81" stroke-width="1" fill="none">
+    <path d="M110,150 Q180,120 260,140 Q340,160 420,155 Q500,150 580,145 Q660,140 740,160 Q820,170 900,140"/>
+    <path d="M900,140 Q980,110 1060,150 Q1140,170 1220,145 Q1300,120 1380,155"/>
+  </g>
+</svg>

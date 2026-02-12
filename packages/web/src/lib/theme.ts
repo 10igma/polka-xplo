@@ -22,6 +22,10 @@ export interface ThemeConfig {
   tokenDecimals: number;
   /** SS58 address prefix */
   addressPrefix: number;
+  /** Optional banner image shown behind the header navigation */
+  banner: string | null;
+  /** Optional brand wordmark image used in place of logo + chain name */
+  brand: string | null;
 }
 
 /** Derive a ThemeConfig from a ChainConfig */
@@ -31,6 +35,8 @@ function fromChain(chain: ChainConfig): ThemeConfig {
     name: chain.name,
     accentColor: chain.colorTheme,
     logo: chain.logo ?? null,
+    banner: chain.banner ?? null,
+    brand: chain.brand ?? null,
     tokenSymbol: chain.tokenSymbol,
     tokenDecimals: chain.tokenDecimals,
     addressPrefix: chain.addressPrefix,
@@ -43,6 +49,8 @@ const FALLBACK_THEME: ThemeConfig = {
   name: "Block Explorer",
   accentColor: "#E6007A",
   logo: null,
+  banner: null,
+  brand: null,
   tokenSymbol: "UNIT",
   tokenDecimals: 12,
   addressPrefix: 42,
