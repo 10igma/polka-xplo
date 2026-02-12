@@ -36,6 +36,7 @@ import {
 import { detectSearchType, normalizeAddress } from "@polka-xplo/shared";
 import { metrics } from "../metrics.js";
 import { getRuntimeSummary } from "../runtime-parser.js";
+import { getLiveBalance } from "../chain-state.js";
 
 /**
  * The API server exposes indexed blockchain data to the frontend.
@@ -640,22 +641,42 @@ export function createApiServer(
       }
 
       const account = await getAccount(hexKey);
-      if (!account) {
+
+      // Fetch live balance from chain RPC (always accurate)
+      let balance = account?.balance ?? null;
+      if (rpcPool) {
+        try {
+          const live = await getLiveBalance(rpcPool, hexKey);
+          if (live) {
+            balance = {
+              free: live.free,
+              reserved: live.reserved,
+              frozen: live.frozen,
+              flags: live.flags,
+            };
+          }
+        } catch (err) {
+          // Fall back to DB balance if RPC fails
+          console.warn("[API] Live balance query failed, using DB fallback:", err);
+        }
+      }
+
+      if (!account && !balance) {
         res.status(404).json({ error: "Account not found" });
         return;
       }
 
-      const recentExtrinsics = await getExtrinsicsBySigner(hexKey, 20);
+      const recentExtrinsics = account ? await getExtrinsicsBySigner(hexKey, 20) : [];
 
       res.json({
         account: {
-          address: account.address,
-          publicKey: account.publicKey,
-          identity: account.identity,
-          lastActiveBlock: account.lastActiveBlock,
-          createdAtBlock: account.createdAtBlock,
+          address: account?.address ?? hexKey,
+          publicKey: account?.publicKey ?? hexKey,
+          identity: account?.identity ?? null,
+          lastActiveBlock: account?.lastActiveBlock ?? null,
+          createdAtBlock: account?.createdAtBlock ?? null,
         },
-        balance: account.balance,
+        balance,
         recentExtrinsics,
       });
     } catch {
