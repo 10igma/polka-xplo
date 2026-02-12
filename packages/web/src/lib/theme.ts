@@ -1,4 +1,4 @@
-import { DEFAULT_CHAINS, type ChainConfig } from "@polka-xplo/shared";
+import { DEFAULT_CHAINS, type ChainConfig, type ChainSocialLinks } from "@polka-xplo/shared";
 
 /**
  * Theme / branding configuration for the explorer.
@@ -26,6 +26,8 @@ export interface ThemeConfig {
   banner: string | null;
   /** Optional brand wordmark image used in place of logo + chain name */
   brand: string | null;
+  /** Social / external links (website, twitter, discord, telegram, github) */
+  socialLinks: ChainSocialLinks;
 }
 
 /** Derive a ThemeConfig from a ChainConfig */
@@ -37,6 +39,7 @@ function fromChain(chain: ChainConfig): ThemeConfig {
     logo: chain.logo ?? null,
     banner: chain.banner ?? null,
     brand: chain.brand ?? null,
+    socialLinks: chain.socialLinks ?? {},
     tokenSymbol: chain.tokenSymbol,
     tokenDecimals: chain.tokenDecimals,
     addressPrefix: chain.addressPrefix,
@@ -51,6 +54,7 @@ const FALLBACK_THEME: ThemeConfig = {
   logo: null,
   banner: null,
   brand: null,
+  socialLinks: {},
   tokenSymbol: "UNIT",
   tokenDecimals: 12,
   addressPrefix: 42,

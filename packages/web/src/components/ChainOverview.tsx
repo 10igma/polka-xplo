@@ -1,6 +1,7 @@
 import Image from "next/image";
 import type { ChainStats } from "@/lib/api";
 import type { ThemeConfig } from "@/lib/theme";
+import type { ChainSocialLinks } from "@polka-xplo/shared";
 import { formatNumber } from "@/lib/format";
 
 /**
@@ -42,38 +43,20 @@ const ICONS = {
  * Social / external link icons.
  * Used in the Basic Info panel for chain links.
  */
-function SocialLinks({ chainId }: { chainId: string }) {
-  // Common links per chain — extend as needed
-  const links: Record<string, { icon: string; href: string; label: string }[]> = {
-    ajuna: [
-      { icon: "web", href: "https://ajuna.io", label: "Website" },
-      { icon: "x", href: "https://x.com/AjunaNetwork", label: "X" },
-      { icon: "telegram", href: "https://t.me/AjunaNetwork", label: "Telegram" },
-      { icon: "github", href: "https://github.com/AjunaNetwork", label: "GitHub" },
-      { icon: "discord", href: "https://discord.gg/ajuna", label: "Discord" },
-    ],
-    polkadot: [
-      { icon: "web", href: "https://polkadot.network", label: "Website" },
-      { icon: "x", href: "https://x.com/Polkadot", label: "X" },
-      { icon: "github", href: "https://github.com/polkadot-fellows", label: "GitHub" },
-    ],
-    kusama: [
-      { icon: "web", href: "https://kusama.network", label: "Website" },
-      { icon: "x", href: "https://x.com/kusamanetwork", label: "X" },
-      { icon: "github", href: "https://github.com/polkadot-fellows", label: "GitHub" },
-    ],
-    assethub: [
-      { icon: "web", href: "https://polkadot.network", label: "Website" },
-      { icon: "github", href: "https://github.com/polkadot-fellows", label: "GitHub" },
-    ],
-  };
+function SocialLinks({ socialLinks }: { socialLinks: ChainSocialLinks }) {
+  const links: { icon: string; href: string; label: string }[] = [];
 
-  const chainLinks = links[chainId] ?? [];
-  if (chainLinks.length === 0) return null;
+  if (socialLinks.website) links.push({ icon: "web", href: socialLinks.website, label: "Website" });
+  if (socialLinks.twitter) links.push({ icon: "x", href: socialLinks.twitter, label: "X" });
+  if (socialLinks.telegram) links.push({ icon: "telegram", href: socialLinks.telegram, label: "Telegram" });
+  if (socialLinks.github) links.push({ icon: "github", href: socialLinks.github, label: "GitHub" });
+  if (socialLinks.discord) links.push({ icon: "discord", href: socialLinks.discord, label: "Discord" });
+
+  if (links.length === 0) return null;
 
   return (
     <div className="flex items-center gap-3 mt-3">
-      {chainLinks.map((link) => (
+      {links.map((link) => (
         <a
           key={link.icon}
           href={link.href}
@@ -176,7 +159,7 @@ export function ChainOverview({ theme, stats, specVersion }: ChainOverviewProps)
         </div>
 
         {/* Social / external links */}
-        <SocialLinks chainId={theme.chainId} />
+        <SocialLinks socialLinks={theme.socialLinks} />
       </div>
 
       {/* ── Chain Data ─────────────────────────────────────── */}

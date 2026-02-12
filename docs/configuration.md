@@ -45,7 +45,11 @@ The `chain-config.json` file at the project root defines all supported chains:
       "tokenSymbol": "DOT",
       "tokenDecimals": 10,
       "colorTheme": "#E6007A",
-      "banner": "/banners/polkadot.svg"
+      "banner": "/banners/polkadot.svg",
+      "socialLinks": {
+        "website": "https://polkadot.network",
+        "twitter": "https://x.com/Polkadot"
+      }
     },
     {
       "id": "ajuna",
@@ -58,6 +62,13 @@ The `chain-config.json` file at the project root defines all supported chains:
       "logo": "/logos/ajuna.svg",
       "banner": "/banners/ajuna.svg",
       "brand": "/brand/ajuna.svg",
+      "socialLinks": {
+        "website": "https://ajuna.io",
+        "twitter": "https://x.com/AjunaNetwork",
+        "discord": "https://discord.gg/ajuna",
+        "telegram": "https://t.me/AjunaNetwork",
+        "github": "https://github.com/AjunaNetwork"
+      },
       "isParachain": true,
       "relayChain": "polkadot"
     }
@@ -80,9 +91,24 @@ The `chain-config.json` file at the project root defines all supported chains:
 | `logo`           | `string`   | No       | Path to logo image (relative to `/public` or URL)  |
 | `banner`         | `string`   | No       | Path to banner image (relative to `/public` or URL), shown behind header |
 | `brand`          | `string`   | No       | Path to brand wordmark image, shown in header in place of logo + name |
+| `socialLinks`    | `object`   | No       | Social / external links shown on the homepage (see below) |
 | `isParachain`    | `boolean`  | No       | Whether this is a parachain                        |
 | `relayChain`     | `string`   | No       | Parent relay chain ID                              |
 | `addressType`    | `string`   | No       | Address format: `"SS58"` (default) or `"H160"` (for EVM parachains like Moonbeam) |
+
+#### `socialLinks` Object
+
+All fields are optional strings (URLs):
+
+| Field       | Description                            |
+| ----------- | -------------------------------------- |
+| `website`   | Project homepage URL                   |
+| `twitter`   | X / Twitter profile URL                |
+| `discord`   | Discord invite link                    |
+| `telegram`  | Telegram group/channel link            |
+| `github`    | GitHub organization or repo URL        |
+
+These links are displayed as icon buttons in the Basic Info panel on the homepage.
 
 ### Adding a Custom Chain
 
@@ -100,6 +126,12 @@ The `chain-config.json` file at the project root defines all supported chains:
   "logo": "/logos/mychain.svg",
   "banner": "/banners/mychain.svg",
   "brand": "/brand/mychain.svg",
+  "socialLinks": {
+    "website": "https://mychain.network",
+    "twitter": "https://x.com/mychain",
+    "discord": "https://discord.gg/mychain",
+    "telegram": "https://t.me/mychain"
+  },
   "isParachain": true,
   "relayChain": "polkadot"
 }
