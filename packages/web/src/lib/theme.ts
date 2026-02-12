@@ -28,6 +28,10 @@ export interface ThemeConfig {
   brand: string | null;
   /** Social / external links (website, twitter, discord, telegram, github) */
   socialLinks: ChainSocialLinks;
+  /** Whether this chain is a parachain */
+  isParachain: boolean;
+  /** Name of the relay chain (e.g. "polkadot", "kusama") */
+  relayChain: string | null;
 }
 
 /** Derive a ThemeConfig from a ChainConfig */
@@ -43,6 +47,8 @@ function fromChain(chain: ChainConfig): ThemeConfig {
     tokenSymbol: chain.tokenSymbol,
     tokenDecimals: chain.tokenDecimals,
     addressPrefix: chain.addressPrefix,
+    isParachain: chain.isParachain ?? false,
+    relayChain: chain.relayChain ?? null,
   };
 }
 
@@ -58,6 +64,8 @@ const FALLBACK_THEME: ThemeConfig = {
   tokenSymbol: "UNIT",
   tokenDecimals: 12,
   addressPrefix: 42,
+  isParachain: false,
+  relayChain: null,
 };
 
 /**
