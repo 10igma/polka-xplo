@@ -55,4 +55,4 @@ extensions/
 
 ## License
 
-[MIT](LICENSE)
+[AGPL 3.0](LICENSE)
