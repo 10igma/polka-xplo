@@ -99,6 +99,10 @@ export interface ChainConfig {
   colorTheme: string;
   /** Optional path to a logo image (relative to /public or absolute URL) */
   logo?: string;
+  /** Optional path to a banner image shown behind the header (relative to /public or absolute URL) */
+  banner?: string;
+  /** Optional path to a brand wordmark image used in place of logo + name text */
+  brand?: string;
   isParachain?: boolean;
   relayChain?: string;
   addressType?: "SS58" | "H160";

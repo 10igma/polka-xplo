@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 220" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0a0a0a"/>
+      <stop offset="50%" stop-color="#111111"/>
+      <stop offset="100%" stop-color="#060606"/>
+    </linearGradient>
+    <radialGradient id="glow1" cx="30%" cy="50%" r="45%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.06"/>
+      <stop offset="100%" stop-color="transparent" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="glow2" cx="80%" cy="30%" r="30%">
+      <stop offset="0%" stop-color="#888888" stop-opacity="0.08"/>
+      <stop offset="100%" stop-color="transparent" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1440" height="220" fill="url(#bg)"/>
+  <rect width="1440" height="220" fill="url(#glow1)"/>
+  <rect width="1440" height="220" fill="url(#glow2)"/>
+  <!-- Kusama canary / edgy angular pattern -->
+  <g opacity="0.06" stroke="#ffffff" stroke-width="1" fill="none">
+    <polygon points="100,30 160,80 80,80"/>
+    <polygon points="250,50 310,110 190,110"/>
+    <polygon points="400,20 480,90 340,90"/>
+    <polygon points="550,40 610,100 510,100"/>
+    <polygon points="700,25 780,85 650,85"/>
+    <polygon points="850,45 930,105 790,105"/>
+    <polygon points="1000,30 1080,90 940,90"/>
+    <polygon points="1150,50 1230,110 1090,110"/>
+    <polygon points="1300,35 1380,95 1240,95"/>
+  </g>
+  <!-- Scattered shards -->
+  <g opacity="0.04" fill="#ffffff">
+    <polygon points="180,140 210,160 185,175"/>
+    <polygon points="420,130 455,155 425,170"/>
+    <polygon points="680,145 715,165 685,180"/>
+    <polygon points="950,135 985,150 955,165"/>
+    <polygon points="1200,140 1235,160 1205,175"/>
+  </g>
+  <!-- Noise-like dots -->
+  <g opacity="0.05" fill="#ffffff">
+    <circle cx="50" cy="180" r="2"/>
+    <circle cx="150" cy="200" r="1.5"/>
+    <circle cx="300" cy="170" r="2.5"/>
+    <circle cx="470" cy="190" r="1.8"/>
+    <circle cx="620" cy="175" r="2"/>
+    <circle cx="790" cy="195" r="1.5"/>
+    <circle cx="930" cy="185" r="2.2"/>
+    <circle cx="1100" cy="175" r="1.8"/>
+    <circle cx="1280" cy="190" r="2"/>
+    <circle cx="1400" cy="180" r="1.5"/>
+  </g>
+</svg>

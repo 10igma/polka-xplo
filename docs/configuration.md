@@ -44,7 +44,8 @@ The `chain-config.json` file at the project root defines all supported chains:
       "addressPrefix": 0,
       "tokenSymbol": "DOT",
       "tokenDecimals": 10,
-      "colorTheme": "#E6007A"
+      "colorTheme": "#E6007A",
+      "banner": "/banners/polkadot.svg"
     },
     {
       "id": "ajuna",
@@ -54,6 +55,7 @@ The `chain-config.json` file at the project root defines all supported chains:
       "tokenSymbol": "AJUN",
       "tokenDecimals": 12,
       "colorTheme": "#F97316",
+      "banner": "/banners/ajuna.svg",
       "isParachain": true,
       "relayChain": "polkadot"
     }
@@ -73,6 +75,7 @@ The `chain-config.json` file at the project root defines all supported chains:
 | `tokenSymbol`    | `string`   | Yes      | Native token symbol (e.g., `DOT`, `KSM`, `AJUN`)  |
 | `tokenDecimals`  | `number`   | Yes      | Token decimal places                               |
 | `colorTheme`     | `string`   | Yes      | Hex color for UI branding                          |
+| `banner`         | `string`   | No       | Path to banner image (relative to `/public` or URL), shown behind header |
 | `isParachain`    | `boolean`  | No       | Whether this is a parachain                        |
 | `relayChain`     | `string`   | No       | Parent relay chain ID                              |
 
@@ -89,12 +92,28 @@ The `chain-config.json` file at the project root defines all supported chains:
   "tokenSymbol": "MYC",
   "tokenDecimals": 12,
   "colorTheme": "#FF6600",
+  "banner": "/banners/mychain.svg",
   "isParachain": true,
   "relayChain": "polkadot"
 }
 ```
 
-2. Set `CHAIN_ID=mychain` and `ARCHIVE_NODE_URL=wss://rpc.mychain.network` in your environment.
+2. Place your banner image in `packages/web/public/banners/mychain.svg` (or `.png`, `.jpg`).
+
+3. Set `CHAIN_ID=mychain` and `ARCHIVE_NODE_URL=wss://rpc.mychain.network` in your environment.
+
+### Banner Images
+
+Each chain can have a custom banner image displayed behind the top navigation, giving every chain explorer a distinct visual identity (similar to Subscan). Banners are:
+
+- **Recommended size:** 1440 × 220 pixels (or SVG with that viewBox)
+- **Format:** SVG preferred for crispness; PNG/JPG also supported
+- **Placement:** Behind the header bar with a dark gradient overlay for readability
+- **Fallback:** If no banner is set, a subtle accent-colour gradient is shown instead
+
+Put banner files in `packages/web/public/banners/` and reference them as `"/banners/filename.svg"` in the chain config.
+
+You can also use a full URL (e.g. `"https://example.com/banner.png"`) for externally hosted banners.
 
 ### Multi-RPC Support
 

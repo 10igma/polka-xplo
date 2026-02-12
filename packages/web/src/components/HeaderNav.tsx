@@ -2,6 +2,7 @@
 
 import React, { useState, useRef, useEffect } from "react";
 import { PrefixSelector } from "./PrefixSelector";
+import { useTheme } from "@/lib/theme-context";
 
 /**
  * Reusable dropdown menu for the header navigation.
@@ -67,6 +68,8 @@ function NavDropdown({
  * plus a prefix selector.
  */
 export function HeaderNav({ apiDocsUrl }: { apiDocsUrl: string }) {
+  const theme = useTheme();
+
   const blockchainLinks = [
     { href: "/blocks", label: "Blocks" },
     { href: "/extrinsics", label: "Extrinsics" },
@@ -86,7 +89,7 @@ export function HeaderNav({ apiDocsUrl }: { apiDocsUrl: string }) {
   ];
 
   return (
-    <nav className="hidden sm:flex items-center gap-4 text-sm text-zinc-400">
+    <nav className="hidden sm:flex items-center gap-3 text-sm text-zinc-400">
       <NavDropdown label="Blockchain" links={blockchainLinks} />
       <NavDropdown label="Governance" links={governanceLinks} />
       <a href="/assets" className="hover:text-zinc-100 transition-colors">
@@ -106,6 +109,22 @@ export function HeaderNav({ apiDocsUrl }: { apiDocsUrl: string }) {
       >
         API
       </a>
+
+      {/* Separator */}
+      <div className="h-4 w-px bg-zinc-700/60" />
+
+      {/* Chain badge — like Subscan's "Parachain" pill */}
+      <span
+        className="inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-xs font-medium"
+        style={{
+          borderColor: `${theme.accentColor}40`,
+          color: theme.accentColor,
+          backgroundColor: `${theme.accentColor}10`,
+        }}
+      >
+        {theme.name}
+      </span>
+
       <PrefixSelector />
     </nav>
   );

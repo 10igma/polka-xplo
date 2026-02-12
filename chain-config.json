@@ -7,7 +7,8 @@
       "addressPrefix": 0,
       "tokenSymbol": "DOT",
       "tokenDecimals": 10,
-      "colorTheme": "#E6007A"
+      "colorTheme": "#E6007A",
+      "banner": "/banners/polkadot.svg"
     },
     {
       "id": "kusama",
@@ -16,7 +17,8 @@
       "addressPrefix": 2,
       "tokenSymbol": "KSM",
       "tokenDecimals": 12,
-      "colorTheme": "#000000"
+      "colorTheme": "#000000",
+      "banner": "/banners/kusama.svg"
     },
     {
       "id": "assethub",
@@ -26,6 +28,7 @@
       "tokenSymbol": "DOT",
       "tokenDecimals": 10,
       "colorTheme": "#48CC81",
+      "banner": "/banners/assethub.svg",
       "isParachain": true,
       "relayChain": "polkadot"
     },
@@ -53,6 +56,7 @@
       "tokenSymbol": "AJUN",
       "tokenDecimals": 12,
       "colorTheme": "#F0388B",
+      "banner": "/banners/ajuna.svg",
       "isParachain": true,
       "relayChain": "polkadot"
     }

@@ -15,6 +15,7 @@ export const DEFAULT_CHAINS: ChainConfig[] = [
     tokenDecimals: 10,
     colorTheme: "#E6007A",
     logo: "/logos/polkadot.svg",
+    banner: "/banners/polkadot.svg",
   },
   {
     id: "kusama",
@@ -29,6 +30,7 @@ export const DEFAULT_CHAINS: ChainConfig[] = [
     tokenDecimals: 12,
     colorTheme: "#000000",
     logo: "/logos/kusama.svg",
+    banner: "/banners/kusama.svg",
   },
   {
     id: "assethub",
@@ -39,6 +41,7 @@ export const DEFAULT_CHAINS: ChainConfig[] = [
     tokenDecimals: 10,
     colorTheme: "#48CC81",
     logo: "/logos/assethub.svg",
+    banner: "/banners/assethub.svg",
     isParachain: true,
     relayChain: "polkadot",
   },
@@ -51,6 +54,8 @@ export const DEFAULT_CHAINS: ChainConfig[] = [
     tokenDecimals: 12,
     colorTheme: "#F0388B",
     logo: "/logos/ajuna.svg",
+    banner: "/banners/ajuna.svg",
+    brand: "/brand/ajuna.svg",
     isParachain: true,
     relayChain: "polkadot",
   },
