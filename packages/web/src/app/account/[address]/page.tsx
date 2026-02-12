@@ -2,15 +2,14 @@ import { getAccount, type OnChainIdentity } from "@/lib/api";
 import { AccountActivity } from "@/components/AccountActivity";
 import { AddressDisplay } from "@/components/AddressDisplay";
 import { Identicon } from "@/components/Identicon";
-import { formatBalance } from "@/lib/format";
+import { formatBalance, formatNumber } from "@/lib/format";
 import { theme } from "@/lib/theme";
 
 export const dynamic = "force-dynamic";
 
 /**
  * Account Detail Page — Server Component
- * Shows address header with on-chain identity, balance breakdown,
- * asset balances, and tabbed transaction history.
+ * Three-panel overview (identity, stats, balance) plus activity tabs.
  */
 export default async function AccountPage({ params }: { params: Promise<{ address: string }> }) {
   const { address } = await params;
@@ -44,55 +43,120 @@ export default async function AccountPage({ params }: { params: Promise<{ addres
     (j) => j.judgement === "Reasonable" || j.judgement === "KnownGood",
   );
 
+  // Compute stats
+  const extrinsicCount = recentExtrinsics?.length ?? 0;
+  const assetCount = assetBalances?.length ?? 0;
+
   return (
     <div className="space-y-6">
-      {/* Address header with identity */}
-      <div className="flex items-center gap-3">
-        {/* Polkadot Identicon */}
-        <Identicon address={account.address} size={48} className="shrink-0" />
-        <div className="min-w-0 flex-1">
-          {identity?.display ? (
-            <div className="flex items-center gap-2">
-              <h1 className="text-lg font-bold text-zinc-100">{identity.display}</h1>
-              {hasVerification && (
-                <span title="Verified identity" className="flex items-center gap-0.5 text-xs font-medium px-1.5 py-0.5 rounded-full bg-green-500/15 text-green-400 border border-green-500/25">
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
-                  Verified
-                </span>
+      {/* ── Three-panel overview row ─────────────────────── */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+
+        {/* Panel 1 — Basic Info / Identity */}
+        <div className="card p-5 space-y-4">
+          <h3 className="text-xs font-semibold text-zinc-400 tracking-wide uppercase flex items-center gap-2">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-zinc-500">
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
+            </svg>
+            Basic Info
+          </h3>
+
+          {/* Identicon + identity display */}
+          <div className="flex items-center gap-3">
+            <Identicon address={account.address} size={44} className="shrink-0" />
+            <div className="min-w-0">
+              {identity?.display ? (
+                <div className="flex items-center gap-2">
+                  <p className="text-sm font-bold text-zinc-100">{identity.display}</p>
+                  {hasVerification && (
+                    <span title="Verified identity" className="flex items-center gap-0.5 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-green-500/15 text-green-400 border border-green-500/25">
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
+                      Verified
+                    </span>
+                  )}
+                </div>
+              ) : (
+                <p className="text-sm text-zinc-400">No on-chain identity</p>
+              )}
+              {identity?.legal && (
+                <p className="text-xs text-zinc-500">{identity.legal}</p>
               )}
             </div>
-          ) : null}
-          <AddressDisplay
-            address={account.address}
-            className="text-sm font-mono text-zinc-400 break-all"
-          />
-          {/* Identity quick icons */}
-          {identity && <IdentityIcons identity={identity} />}
+          </div>
+
+          {/* Address */}
+          <div className="text-[11px] text-zinc-500">
+            <AddressDisplay
+              address={account.address}
+              className="text-xs font-mono text-zinc-400 break-all"
+            />
+          </div>
+
+          {/* Identity links */}
+          {identity && <IdentityLinks identity={identity} />}
         </div>
-      </div>
 
-      {/* On-chain Identity card */}
-      {identity && <IdentityCard identity={identity} />}
+        {/* Panel 2 — Account Stats */}
+        <div className="card p-5 space-y-4">
+          <h3 className="text-xs font-semibold text-zinc-400 tracking-wide uppercase flex items-center gap-2">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-zinc-500">
+              <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>
+            </svg>
+            Account Stats
+          </h3>
 
-      {/* Account detail card */}
-      <div className="card space-y-3">
-        <DetailRow label="Address">
-          <AddressDisplay
-            address={account.address}
-            className="text-sm font-mono text-zinc-200 break-all"
-          />
-        </DetailRow>
-      </div>
+          <div className="space-y-3">
+            <StatItem
+              icon="M3 3h7v7H3V3zm11 0h7v7h-7V3zM3 14h7v7H3v-7zm11 0h7v7h-7v-7z"
+              label="Created at Block"
+              value={`#${formatNumber(account.createdAtBlock)}`}
+            />
+            <StatItem
+              icon="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+              label="Last Active Block"
+              value={`#${formatNumber(account.lastActiveBlock)}`}
+            />
+            <StatItem
+              icon="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"
+              label="Recent Extrinsics"
+              value={extrinsicCount.toString()}
+            />
+            <StatItem
+              icon="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+              label="Asset Types Held"
+              value={assetCount.toString()}
+            />
+            <StatItem
+              icon="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"
+              label="Identity"
+              value={identity ? "Set" : "None"}
+            />
+            {identity?.judgements && identity.judgements.length > 0 && (
+              <StatItem
+                icon="M5 13l4 4L19 7"
+                label="Judgements"
+                value={identity.judgements.map((j) => j.judgement).join(", ")}
+              />
+            )}
+          </div>
+        </div>
 
-      {/* Native balance breakdown */}
-      <div className="card space-y-3">
-        <h2 className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">
-          Native Balance ({symbol})
-        </h2>
-        <BalanceRow label="Total Balance" value={total.toString()} decimals={decimals} symbol={symbol} primary />
-        <BalanceRow label="Transferrable" value={transferable.toString()} decimals={decimals} symbol={symbol} />
-        <BalanceRow label="Locked" value={frozen.toString()} decimals={decimals} symbol={symbol} />
-        <BalanceRow label="Reserved" value={reserved.toString()} decimals={decimals} symbol={symbol} />
+        {/* Panel 3 — Native Balance */}
+        <div className="card p-5 space-y-4">
+          <h3 className="text-xs font-semibold text-zinc-400 tracking-wide uppercase flex items-center gap-2">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-zinc-500">
+              <path d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            Native Balance ({symbol})
+          </h3>
+
+          <div className="space-y-3">
+            <BalanceItem label="Total Balance" value={total.toString()} decimals={decimals} symbol={symbol} primary />
+            <BalanceItem label="Transferrable" value={transferable.toString()} decimals={decimals} symbol={symbol} />
+            <BalanceItem label="Locked" value={frozen.toString()} decimals={decimals} symbol={symbol} />
+            <BalanceItem label="Reserved" value={reserved.toString()} decimals={decimals} symbol={symbol} />
+          </div>
+        </div>
       </div>
 
       {/* Non-native asset balances */}
@@ -128,141 +192,55 @@ export default async function AccountPage({ params }: { params: Promise<{ addres
   );
 }
 
-// ---- Identity Icons (quick row of icons showing which fields are set) ----
+// ---- Identity Links (row of clickable social icons) ----
 
-function IdentityIcons({ identity }: { identity: OnChainIdentity }) {
-  const icons: Array<{ label: string; icon: React.ReactNode; set: boolean }> = [
-    { label: "Email", set: !!identity.email, icon: <EmailIcon /> },
-    { label: "Web", set: !!identity.web, icon: <WebIcon /> },
-    { label: "Twitter / X", set: !!identity.twitter, icon: <TwitterIcon /> },
-    { label: "Riot / Matrix", set: !!identity.riot, icon: <RiotIcon /> },
-    {
-      label: "Discord",
-      set: identity.additional.some((a) => a.key.toLowerCase() === "discord"),
-      icon: <DiscordIcon />,
-    },
-  ];
+function IdentityLinks({ identity }: { identity: OnChainIdentity }) {
+  const links: Array<{ label: string; href: string; icon: React.ReactNode }> = [];
 
-  const active = icons.filter((i) => i.set);
-  if (active.length === 0) return null;
+  if (identity.web) {
+    const href = identity.web.startsWith("http") ? identity.web : `https://${identity.web}`;
+    links.push({ label: "Website", href, icon: <WebIcon /> });
+  }
+  if (identity.email) {
+    links.push({ label: "Email", href: `mailto:${identity.email}`, icon: <EmailIcon /> });
+  }
+  if (identity.twitter) {
+    links.push({
+      label: "Twitter / X",
+      href: `https://x.com/${identity.twitter.replace(/^@/, "")}`,
+      icon: <TwitterIcon />,
+    });
+  }
+  if (identity.riot) {
+    links.push({ label: "Riot / Matrix", href: "#", icon: <RiotIcon /> });
+  }
+  for (const { key, value } of identity.additional) {
+    if (key.toLowerCase() === "discord") {
+      links.push({ label: "Discord", href: "#", icon: <DiscordIcon /> });
+    }
+  }
+
+  if (links.length === 0) return null;
 
   return (
-    <div className="flex items-center gap-1.5 mt-1">
-      {active.map((i) => (
-        <span key={i.label} title={i.label} className="text-zinc-400 hover:text-zinc-200 transition-colors">
-          {i.icon}
-        </span>
+    <div className="flex items-center gap-3 pt-1">
+      {links.map((link) => (
+        <a
+          key={link.label}
+          href={link.href}
+          target="_blank"
+          rel="noopener noreferrer"
+          title={link.label}
+          className="text-zinc-500 hover:text-zinc-200 transition-colors"
+        >
+          {link.icon}
+        </a>
       ))}
     </div>
   );
 }
 
-// ---- Identity Card (full details) ----
-
-function IdentityCard({ identity }: { identity: OnChainIdentity }) {
-  const fields: Array<{ label: string; value: string | null; href?: string; icon: React.ReactNode }> = [];
-
-  if (identity.display) fields.push({ label: "Display Name", value: identity.display, icon: <NameIcon /> });
-  if (identity.legal) fields.push({ label: "Legal Name", value: identity.legal, icon: <LegalIcon /> });
-  if (identity.email)
-    fields.push({
-      label: "Email",
-      value: identity.email,
-      href: `mailto:${identity.email}`,
-      icon: <EmailIcon />,
-    });
-  if (identity.web)
-    fields.push({
-      label: "Web",
-      value: identity.web,
-      href: identity.web.startsWith("http") ? identity.web : `https://${identity.web}`,
-      icon: <WebIcon />,
-    });
-  if (identity.twitter)
-    fields.push({
-      label: "Twitter / X",
-      value: identity.twitter.startsWith("@") ? identity.twitter : `@${identity.twitter}`,
-      href: `https://x.com/${identity.twitter.replace(/^@/, "")}`,
-      icon: <TwitterIcon />,
-    });
-  if (identity.riot)
-    fields.push({ label: "Riot / Matrix", value: identity.riot, icon: <RiotIcon /> });
-
-  // Additional fields (e.g. discord)
-  for (const { key, value } of identity.additional) {
-    const lowerKey = key.toLowerCase();
-    if (lowerKey === "discord") {
-      fields.push({ label: "Discord", value, icon: <DiscordIcon /> });
-    } else {
-      fields.push({ label: key, value, icon: <AdditionalIcon /> });
-    }
-  }
-
-  if (identity.image) fields.push({ label: "Image", value: identity.image, icon: <ImageIcon /> });
-
-  // Judgements
-  const judgements = identity.judgements.filter((j) => j.judgement !== "Unknown");
-
-  if (fields.length === 0 && judgements.length === 0) return null;
-
-  return (
-    <div className="card space-y-3">
-      <h2 className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">
-        On-chain Identity
-      </h2>
-
-      <div className="space-y-2">
-        {fields.map((f, i) => (
-          <div key={i} className="flex items-start gap-3">
-            <span className="text-zinc-500 shrink-0 mt-0.5 w-4 h-4">{f.icon}</span>
-            <div className="flex flex-col sm:flex-row sm:items-center gap-0.5 sm:gap-3 min-w-0">
-              <span className="text-xs text-zinc-500 sm:w-28 shrink-0">{f.label}</span>
-              {f.href ? (
-                <a
-                  href={f.href}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-sm text-accent hover:underline break-all"
-                >
-                  {f.value}
-                </a>
-              ) : (
-                <span className="text-sm text-zinc-200 break-all">{f.value}</span>
-              )}
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* Judgements */}
-      {judgements.length > 0 && (
-        <div className="pt-2 border-t border-zinc-800">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-xs text-zinc-500">Judgements:</span>
-            {judgements.map((j, i) => (
-              <span
-                key={i}
-                className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                  j.judgement === "KnownGood"
-                    ? "bg-green-500/15 text-green-400 border border-green-500/25"
-                    : j.judgement === "Reasonable"
-                      ? "bg-blue-500/15 text-blue-400 border border-blue-500/25"
-                      : j.judgement === "Erroneous" || j.judgement === "LowQuality"
-                        ? "bg-red-500/15 text-red-400 border border-red-500/25"
-                        : "bg-zinc-700/50 text-zinc-400 border border-zinc-600/50"
-                }`}
-              >
-                #{j.registrarIndex}: {j.judgement}
-              </span>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ---- SVG Icons for identity fields ----
+// ---- SVG Icons for identity links ----
 
 function EmailIcon() {
   return (
@@ -304,50 +282,35 @@ function DiscordIcon() {
   );
 }
 
-function NameIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
-    </svg>
-  );
-}
+// ---- Stat item for Panel 2 ----
 
-function LegalIcon() {
+function StatItem({ icon, label, value }: { icon: string; label: string; value: string }) {
   return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M16 13H8"/><path d="M16 17H8"/><path d="M10 9H8"/>
-    </svg>
-  );
-}
-
-function ImageIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/>
-    </svg>
-  );
-}
-
-function AdditionalIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-      <polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/>
-    </svg>
-  );
-}
-
-// ---- Shared layout helpers ----
-
-function DetailRow({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-4">
-      <span className="text-xs text-zinc-500 sm:w-32 shrink-0">{label}</span>
-      <div className="flex-1 min-w-0">{children}</div>
+    <div className="flex items-start gap-2.5">
+      <svg
+        width="16"
+        height="16"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        className="text-accent shrink-0 mt-0.5"
+      >
+        <path d={icon} />
+      </svg>
+      <div className="min-w-0">
+        <p className="text-[11px] text-zinc-500 leading-tight">{label}</p>
+        <p className="text-sm font-semibold text-zinc-100 tabular-nums">{value}</p>
+      </div>
     </div>
   );
 }
 
-function BalanceRow({
+// ---- Balance item for Panel 3 ----
+
+function BalanceItem({
   label,
   value,
   decimals,
@@ -361,8 +324,8 @@ function BalanceRow({
   primary?: boolean;
 }) {
   return (
-    <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-4">
-      <span className="text-xs text-zinc-500 sm:w-32 shrink-0">{label}</span>
+    <div className="flex flex-col gap-0.5">
+      <span className="text-[11px] text-zinc-500">{label}</span>
       <span
         className={`text-sm font-mono tabular-nums ${
           primary ? "text-zinc-100 font-semibold" : "text-zinc-300"
