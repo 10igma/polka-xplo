@@ -68,12 +68,13 @@ services:
       explorer-redis:
         condition: service_healthy
     environment:
-      DATABASE_URL: postgresql://polkaxplo:polkaxplo@explorer-db:5432/polkaxplo
-      REDIS_URL: redis://explorer-redis:6379
-      ARCHIVE_NODE_URL: wss://rpc.polkadot.io
-      CHAIN_ID: polkadot
-      API_PORT: "3001"
-      BATCH_SIZE: "100"
+      DATABASE_URL: ${DATABASE_URL:-postgresql://polkaxplo:polkaxplo@explorer-db:5432/polkaxplo}
+      REDIS_URL: ${REDIS_URL:-redis://explorer-redis:6379}
+      ARCHIVE_NODE_URL: ${ARCHIVE_NODE_URL:-wss://rpc.polkadot.io}
+      CHAIN_ID: ${CHAIN_ID:-polkadot}
+      API_PORT: ${API_PORT:-3001}
+      BATCH_SIZE: ${BATCH_SIZE:-100}
+      BACKFILL_CONCURRENCY: ${BACKFILL_CONCURRENCY:-10}
     ports:
       - "3001:3001"
 
@@ -87,8 +88,10 @@ services:
     depends_on:
       - explorer-indexer
     environment:
-      API_URL: http://explorer-indexer:3001
-      NEXT_PUBLIC_CHAIN_ID: polkadot
+      API_URL: ${API_URL:-http://explorer-indexer:3001}
+      NEXT_PUBLIC_CHAIN_ID: ${NEXT_PUBLIC_CHAIN_ID:-polkadot}
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:3001}
+      NEXT_PUBLIC_WS_URL: ${NEXT_PUBLIC_WS_URL:-ws://localhost:3001}
     ports:
       - "3000:3000"
 

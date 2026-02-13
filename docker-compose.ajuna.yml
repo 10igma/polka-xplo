@@ -12,12 +12,12 @@
 services:
   explorer-indexer:
     environment:
-      ARCHIVE_NODE_URL: wss://rpc-para.ajuna.network,wss://ajuna.ibp.network,wss://ajuna.dotters.network,wss://rpc-p2.ajuna.network
-      CHAIN_ID: ajuna
+      ARCHIVE_NODE_URL: ${ARCHIVE_NODE_URL:-wss://rpc-para.ajuna.network,wss://ajuna.ibp.network,wss://ajuna.dotters.network,wss://rpc-p2.ajuna.network}
+      CHAIN_ID: ${CHAIN_ID:-ajuna}
 
   explorer-web:
     build:
       args:
-        NEXT_PUBLIC_CHAIN_ID: ajuna
+        NEXT_PUBLIC_CHAIN_ID: ${NEXT_PUBLIC_CHAIN_ID:-ajuna}
     environment:
-      NEXT_PUBLIC_CHAIN_ID: ajuna
+      NEXT_PUBLIC_CHAIN_ID: ${NEXT_PUBLIC_CHAIN_ID:-ajuna}
