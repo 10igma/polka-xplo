@@ -1,0 +1,47 @@
+# Docker Compose override for co-located full-node / collator deployment
+#
+# Use this when the indexer runs on the SAME server as a Substrate node
+# (validator, collator, or archive node) with a local RPC endpoint.
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.local-node.yml up -d
+#
+# Combined with a chain override (e.g. Ajuna on a local collator):
+#   docker compose \
+#     -f docker-compose.yml \
+#     -f docker-compose.ajuna.yml \
+#     -f docker-compose.local-node.yml \
+#     up -d
+#
+# How it works:
+#   LOCAL_NODE_URL is prepended to the RPC pool. The latency-weighted
+#   router will naturally send most traffic to it (sub-ms latency vs
+#   50-200 ms for public RPCs). Public RPCs in ARCHIVE_NODE_URL serve
+#   as automatic fallback if the local node is temporarily unreachable.
+#
+# Prerequisites:
+#   - Your Substrate node must expose its RPC on a port accessible from
+#     the Docker container. The default Substrate RPC port is 9944,
+#     but collators often remap it (e.g. 9733 for Ajuna).
+#     Verify with: curl -s -d '{"jsonrpc":"2.0","id":1,"method":"system_health","params":[]}' \
+#                       -H "Content-Type: application/json" http://127.0.0.1:<port>
+#   - If the node binds to 127.0.0.1, you need either:
+#       a) network_mode: host (used below), or
+#       b) --rpc-external on the Substrate node, or
+#       c) extra_hosts: ["host.docker.internal:host-gateway"]
+#
+# The default below uses host networking so the container sees
+# localhost:9944 as the Substrate node. If you prefer bridge
+# networking, comment out network_mode and use extra_hosts instead.
+
+services:
+  explorer-indexer:
+    # Host networking — container shares the host's network stack,
+    # so ws://127.0.0.1:9944 reaches the co-located Substrate node.
+    network_mode: host
+    environment:
+      # Local node endpoint (prepended to the RPC pool as primary)
+      LOCAL_NODE_URL: ws://127.0.0.1:9944
+      # Database and Redis also need host addresses when using host networking
+      DATABASE_URL: postgresql://polkaxplo:polkaxplo@127.0.0.1:5432/polkaxplo
+      REDIS_URL: redis://127.0.0.1:6379

@@ -80,6 +80,102 @@ The `-v` flag removes Docker volumes, wiping the database and Redis. The indexer
 
 ---
 
+## Co-located Deployment (Local Full Node / Collator)
+
+If you run a Substrate full node, collator, or validator on the same server, you can point the indexer at the local RPC endpoint for the best possible performance:
+
+- **Sub-millisecond latency** — no network hop
+- **No rate limits** — you own the node
+- **Automatic fallback** — public RPCs in `ARCHIVE_NODE_URL` kick in if the local node is temporarily down
+
+### Quick Start
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.local-node.yml up -d
+```
+
+Combined with a chain-specific override (e.g. Ajuna on a local collator):
+
+```bash
+docker compose \
+  -f docker-compose.yml \
+  -f docker-compose.ajuna.yml \
+  -f docker-compose.local-node.yml \
+  up -d
+```
+
+### How It Works
+
+The `LOCAL_NODE_URL` environment variable is optional. When set, the indexer prepends it to the RPC pool. Because the local node has near-zero latency, the latency-weighted router naturally sends it the vast majority of traffic. The public endpoints in `ARCHIVE_NODE_URL` remain in the pool as automatic fallback.
+
+```
+┌─────────────────────────────────────────────────┐
+│              Server / VPS                       │
+│                                                 │
+│  ┌───────────────┐     ws://127.0.0.1:9944      │
+│  │ Substrate Node │◄────────────────────────┐   │
+│  │ (collator/     │                         │   │
+│  │  full node)    │                         │   │
+│  └───────────────┘                         │   │
+│                                             │   │
+│  ┌─────────────┐  ┌───────┐  ┌───────────┐ │   │
+│  │  PostgreSQL  │  │ Redis │  │  Indexer   │─┘   │
+│  └─────────────┘  └───────┘  │  (polka-   │────►│
+│                               │   xplo)    │     │
+│                               └─────┬─────┘     │
+│                                     │            │
+└─────────────────────────────────────┼────────────┘
+                                      │ fallback
+                                      ▼
+                              Public RPC endpoints
+                              (wss://rpc.example.com)
+```
+
+### Without Docker (bare-metal)
+
+If you run the indexer directly on the host (no Docker), just set the env vars:
+
+```bash
+export LOCAL_NODE_URL=ws://127.0.0.1:9944
+export ARCHIVE_NODE_URL=wss://rpc.polkadot.io
+export DATABASE_URL=postgresql://polkaxplo:polkaxplo@localhost:5432/polkaxplo
+export REDIS_URL=redis://localhost:6379
+export CHAIN_ID=polkadot
+
+npm run indexer:start
+```
+
+### Substrate Node Requirements
+
+Your local node must expose its RPC. Typical flags:
+
+```bash
+# Minimal: RPC on localhost only (recommended — safe, no external exposure)
+--rpc-port 9944
+
+# If the indexer runs in Docker with bridge networking, the node
+# needs to listen on all interfaces:
+--rpc-external --rpc-cors all
+```
+
+> **Security:** Prefer `ws://127.0.0.1:9944` (localhost only). Never expose `--rpc-external` to the internet without a reverse proxy and authentication.
+
+### Docker Networking Notes
+
+The default `docker-compose.local-node.yml` uses `network_mode: host` so the container sees `127.0.0.1:9944` directly. If you prefer Docker bridge networking:
+
+```yaml
+# Alternative: use extra_hosts instead of network_mode: host
+services:
+  explorer-indexer:
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      LOCAL_NODE_URL: ws://host.docker.internal:9944
+```
+
+---
+
 ## Data Safety
 
 The indexer is designed for safe interruption:
