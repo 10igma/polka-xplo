@@ -41,11 +41,25 @@ async function main(): Promise<void> {
   console.log(`[Main] Extensions loaded: ${registry.getExtensions().length}`);
 
   // 4. Parse RPC endpoints (comma-separated list supported for load balancing)
+  //    LOCAL_NODE_URL (optional): a co-located full node / collator RPC endpoint.
+  //    When set, it is prepended to the pool so it becomes the primary (lowest
+  //    latency) endpoint, with ARCHIVE_NODE_URL endpoints as fallback.
   const rpcEnv = process.env.ARCHIVE_NODE_URL ?? chainConfig.rpc[0];
   const rpcUrls = rpcEnv
     .split(",")
     .map((u) => u.trim())
     .filter(Boolean);
+
+  const localNodeUrl = process.env.LOCAL_NODE_URL?.trim();
+  if (localNodeUrl) {
+    // Prepend the local node so it becomes the primary endpoint.
+    // The latency-weighted pool will naturally route most traffic to it.
+    if (!rpcUrls.includes(localNodeUrl)) {
+      rpcUrls.unshift(localNodeUrl);
+    }
+    console.log(`[Main] Local node endpoint: ${localNodeUrl}`);
+  }
+
   const rpcPool = new RpcPool(rpcUrls);
 
   // 5. Start the API server early so /health is always reachable

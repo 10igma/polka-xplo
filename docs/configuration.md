@@ -13,6 +13,7 @@ Copy `.env.example` to `.env` for local development. In Docker, these are set in
 | `DATABASE_URL`         | `postgresql://polkaxplo:polkaxplo@localhost:5432/polkaxplo` | PostgreSQL connection string                                                |
 | `REDIS_URL`            | `redis://localhost:6379`                                    | Redis connection string                                                     |
 | `ARCHIVE_NODE_URL`     | `wss://rpc.polkadot.io`                                     | Comma-separated RPC endpoint(s) for round-robin load balancing and failover |
+| `LOCAL_NODE_URL`       | _(unset)_                                                   | Optional co-located node RPC (e.g. `ws://127.0.0.1:9944`). Prepended to pool as primary |
 | `CHAIN_ID`             | `polkadot`                                                  | Chain to index (must match an entry in `chain-config.json`)                 |
 | `API_PORT`             | `3001`                                                      | REST API server port                                                        |
 | `BATCH_SIZE`           | `100`                                                       | Blocks per backfill batch                                                   |
@@ -170,6 +171,30 @@ Monitor endpoint health via:
 ```bash
 curl http://localhost:3001/api/rpc-health
 ```
+
+### Co-located Node (LOCAL_NODE_URL)
+
+If the indexer runs on the same server as a Substrate node (collator, validator, or full archive node), set `LOCAL_NODE_URL` to the local RPC endpoint:
+
+```bash
+LOCAL_NODE_URL=ws://127.0.0.1:9944
+```
+
+This is **entirely optional**. When set:
+
+- The local endpoint is prepended to the RPC pool as the primary
+- The latency-weighted router naturally sends most traffic to it (sub-ms latency)
+- `ARCHIVE_NODE_URL` endpoints remain as automatic fallback
+- If the local node is down, the indexer seamlessly falls back to public RPCs
+
+You can combine both for maximum resilience:
+
+```bash
+LOCAL_NODE_URL=ws://127.0.0.1:9944
+ARCHIVE_NODE_URL=wss://rpc.polkadot.io,wss://polkadot-rpc.dwellir.com
+```
+
+See [Deployment > Co-located Deployment](deployment.md#co-located-deployment-local-full-node--collator) for Docker networking details.
 
 ---
 
