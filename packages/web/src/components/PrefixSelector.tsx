@@ -1,17 +1,20 @@
 "use client";
 
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import { useSS58, SS58_PRESETS } from "@/lib/ss58-context";
 
 /**
  * Dropdown selector for SS58 address prefix.
  * Shows in the header; allows users to switch the display format for all addresses.
+ * Supports keyboard navigation: Escape, ArrowDown/Up, Home, End.
  */
 export function PrefixSelector() {
   const { prefix, setPrefix } = useSS58();
   const [open, setOpen] = useState(false);
   const [custom, setCustom] = useState("");
   const ref = useRef<HTMLDivElement>(null);
+  const itemsRef = useRef<(HTMLButtonElement | null)[]>([]);
+  const triggerRef = useRef<HTMLButtonElement>(null);
 
   // Close on outside click
   useEffect(() => {
@@ -24,13 +27,57 @@ export function PrefixSelector() {
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
+  // Focus first item when dropdown opens
+  useEffect(() => {
+    if (open && itemsRef.current[0]) {
+      itemsRef.current[0].focus();
+    }
+  }, [open]);
+
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setOpen(false);
+        triggerRef.current?.focus();
+        return;
+      }
+      if (!open) return;
+
+      const items = itemsRef.current.filter(Boolean) as HTMLButtonElement[];
+      const currentIndex = items.indexOf(document.activeElement as HTMLButtonElement);
+
+      switch (e.key) {
+        case "ArrowDown":
+          e.preventDefault();
+          items[(currentIndex + 1) % items.length]?.focus();
+          break;
+        case "ArrowUp":
+          e.preventDefault();
+          items[(currentIndex - 1 + items.length) % items.length]?.focus();
+          break;
+        case "Home":
+          e.preventDefault();
+          items[0]?.focus();
+          break;
+        case "End":
+          e.preventDefault();
+          items[items.length - 1]?.focus();
+          break;
+      }
+    },
+    [open],
+  );
+
   const _currentLabel =
     SS58_PRESETS.find((p) => p.prefix === prefix)?.label ?? `Custom (${prefix})`;
 
   return (
-    <div className="relative" ref={ref}>
+    <div className="relative" ref={ref} onKeyDown={handleKeyDown}>
       <button
+        ref={triggerRef}
         onClick={() => setOpen(!open)}
+        aria-haspopup="listbox"
+        aria-expanded={open}
         className="flex items-center gap-1.5 text-xs text-zinc-400 hover:text-zinc-200 transition-colors border border-zinc-700 rounded-md px-2 py-1.5 bg-zinc-900 hover:bg-zinc-800"
       >
         <svg
@@ -65,15 +112,24 @@ export function PrefixSelector() {
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full mt-1 w-52 bg-zinc-900 border border-zinc-700 rounded-lg shadow-xl z-50 py-1 text-sm">
-          {SS58_PRESETS.map((p) => (
+        <div
+          role="listbox"
+          aria-label="SS58 prefix"
+          className="absolute right-0 top-full mt-1 w-52 bg-zinc-900 border border-zinc-700 rounded-lg shadow-xl z-50 py-1 text-sm"
+        >
+          {SS58_PRESETS.map((p, i) => (
             <button
               key={p.prefix}
+              ref={(el) => {
+                itemsRef.current[i] = el;
+              }}
+              role="option"
+              aria-selected={prefix === p.prefix}
               onClick={() => {
                 setPrefix(p.prefix);
                 setOpen(false);
               }}
-              className={`w-full text-left px-3 py-1.5 hover:bg-zinc-800 transition-colors flex items-center justify-between ${
+              className={`w-full text-left px-3 py-1.5 hover:bg-zinc-800 transition-colors flex items-center justify-between focus:outline-none focus:bg-zinc-800 ${
                 prefix === p.prefix ? "text-accent" : "text-zinc-300"
               }`}
             >

@@ -44,8 +44,18 @@ export function ExtrinsicFilter({ modules }: { modules: ExtrinsicModuleInfo[] })
         setCallOpen(false);
       }
     }
+    function handleKey(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        setModuleOpen(false);
+        setCallOpen(false);
+      }
+    }
     document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
+    document.addEventListener("keydown", handleKey);
+    return () => {
+      document.removeEventListener("mousedown", handleClick);
+      document.removeEventListener("keydown", handleKey);
+    };
   }, []);
 
   const navigate = useCallback(
@@ -110,6 +120,8 @@ export function ExtrinsicFilter({ modules }: { modules: ExtrinsicModuleInfo[] })
             setModuleOpen(!moduleOpen);
             setCallOpen(false);
           }}
+          aria-haspopup="listbox"
+          aria-expanded={moduleOpen}
           className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm border transition-colors ${
             currentModule
               ? "bg-accent/10 text-accent border-accent/30"
@@ -129,8 +141,11 @@ export function ExtrinsicFilter({ modules }: { modules: ExtrinsicModuleInfo[] })
         </button>
 
         {moduleOpen && (
-          <div className="absolute top-full left-0 mt-1 w-56 max-h-80 overflow-y-auto rounded-lg border border-zinc-700/50 bg-zinc-900 shadow-xl shadow-black/40 py-1 z-50">
-            <button
+          <div
+            role="listbox"
+            aria-label="Module filter"
+            className="absolute top-full left-0 mt-1 w-56 max-h-80 overflow-y-auto rounded-lg border border-zinc-700/50 bg-zinc-900 shadow-xl shadow-black/40 py-1 z-50"
+          >            <button
               onClick={() => {
                 navigate("", [], signedOnly);
                 setModuleOpen(false);
@@ -172,6 +187,8 @@ export function ExtrinsicFilter({ modules }: { modules: ExtrinsicModuleInfo[] })
               setCallOpen(!callOpen);
               setModuleOpen(false);
             }}
+            aria-haspopup="listbox"
+            aria-expanded={callOpen}
             className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm border transition-colors ${
               selectedCalls.size > 0
                 ? "bg-accent/10 text-accent border-accent/30"

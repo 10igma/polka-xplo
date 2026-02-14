@@ -41,7 +41,17 @@ export function EventFilter({ modules }: { modules: EventModuleInfo[] }) {
       }
     }
     document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
+    function handleKey(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        setModuleOpen(false);
+        setEventOpen(false);
+      }
+    }
+    document.addEventListener("keydown", handleKey);
+    return () => {
+      document.removeEventListener("mousedown", handleClick);
+      document.removeEventListener("keydown", handleKey);
+    };
   }, []);
 
   const navigate = useCallback(
@@ -84,6 +94,8 @@ export function EventFilter({ modules }: { modules: EventModuleInfo[] }) {
             setModuleOpen(!moduleOpen);
             setEventOpen(false);
           }}
+          aria-haspopup="listbox"
+          aria-expanded={moduleOpen}
           className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm border transition-colors ${
             currentModule
               ? "bg-accent/10 text-accent border-accent/30"
@@ -103,7 +115,11 @@ export function EventFilter({ modules }: { modules: EventModuleInfo[] }) {
         </button>
 
         {moduleOpen && (
-          <div className="absolute top-full left-0 mt-1 w-56 max-h-80 overflow-y-auto rounded-lg border border-zinc-700/50 bg-zinc-900 shadow-xl shadow-black/40 py-1 z-50">
+          <div
+            role="listbox"
+            aria-label="Module filter"
+            className="absolute top-full left-0 mt-1 w-56 max-h-80 overflow-y-auto rounded-lg border border-zinc-700/50 bg-zinc-900 shadow-xl shadow-black/40 py-1 z-50"
+          >
             <button
               onClick={() => {
                 navigate("", []);
@@ -146,6 +162,8 @@ export function EventFilter({ modules }: { modules: EventModuleInfo[] }) {
               setEventOpen(!eventOpen);
               setModuleOpen(false);
             }}
+            aria-haspopup="listbox"
+            aria-expanded={eventOpen}
             className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm border transition-colors ${
               selectedEvents.size > 0
                 ? "bg-accent/10 text-accent border-accent/30"
