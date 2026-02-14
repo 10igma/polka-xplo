@@ -9,16 +9,22 @@ import type {
 import { query, transaction, type DbClient } from "./client.js";
 
 // ============================================================
-// Count Cache — avoids expensive COUNT(*) on every page request
+// Caching — avoids expensive full-table scans on every page request
 // ============================================================
 
-interface CacheEntry {
-  value: number;
+interface CacheEntry<T = number> {
+  value: T;
   expiresAt: number;
 }
 
-const COUNT_CACHE_TTL_MS = 10_000; // 10 seconds
-const countCache = new Map<string, CacheEntry>();
+/** Default TTL for count caches (30 seconds) */
+const COUNT_CACHE_TTL_MS = 30_000;
+
+/** Longer TTL for expensive aggregate queries like SUM over JSONB (2 minutes) */
+const SLOW_CACHE_TTL_MS = 120_000;
+
+/** Cache for generic query results (counts, module lists, etc.) */
+const queryCache = new Map<string, CacheEntry<unknown>>();
 
 /**
  * Execute a COUNT query with TTL-based caching.
@@ -28,14 +34,54 @@ async function cachedCount(
   cacheKey: string,
   sql: string,
   params: unknown[] = [],
+  ttl = COUNT_CACHE_TTL_MS,
 ): Promise<number> {
   const now = Date.now();
-  const cached = countCache.get(cacheKey);
+  const cached = queryCache.get(cacheKey) as CacheEntry<number> | undefined;
   if (cached && cached.expiresAt > now) return cached.value;
 
   const result = await query<{ count: string }>(sql, params);
   const value = parseInt(result.rows[0]?.count ?? "0", 10);
-  countCache.set(cacheKey, { value, expiresAt: now + COUNT_CACHE_TTL_MS });
+  queryCache.set(cacheKey, { value, expiresAt: now + ttl });
+  return value;
+}
+
+/**
+ * Get an estimated row count for a table using PostgreSQL statistics.
+ * Returns instantly (~0ms) from pg_class.reltuples which is maintained
+ * by autovacuum/ANALYZE. Accurate within a few percent for large tables.
+ * Falls back to 0 for empty/unanalyzed tables.
+ */
+async function estimatedRowCount(tableName: string): Promise<number> {
+  const now = Date.now();
+  const key = `estimated:${tableName}`;
+  const cached = queryCache.get(key) as CacheEntry<number> | undefined;
+  if (cached && cached.expiresAt > now) return cached.value;
+
+  const result = await query<{ estimate: string }>(
+    `SELECT COALESCE(reltuples, 0)::bigint AS estimate FROM pg_class WHERE relname = $1`,
+    [tableName],
+  );
+  const value = parseInt(result.rows[0]?.estimate ?? "0", 10);
+  queryCache.set(key, { value, expiresAt: now + COUNT_CACHE_TTL_MS });
+  return Math.max(value, 0);
+}
+
+/**
+ * Cache an arbitrary query result with TTL.
+ * Used for expensive queries like DISTINCT module/event lists.
+ */
+async function cachedQuery<T>(
+  cacheKey: string,
+  fn: () => Promise<T>,
+  ttl = SLOW_CACHE_TTL_MS,
+): Promise<T> {
+  const now = Date.now();
+  const cached = queryCache.get(cacheKey) as CacheEntry<T> | undefined;
+  if (cached && cached.expiresAt > now) return cached.value;
+
+  const value = await fn();
+  queryCache.set(cacheKey, { value, expiresAt: now + ttl });
   return value;
 }
 
@@ -113,7 +159,8 @@ export async function getLatestBlocks(
        FROM blocks ORDER BY height DESC LIMIT $1 OFFSET $2`,
       [limit, offset],
     ),
-    cachedCount("blocks", `SELECT COUNT(*) as count FROM blocks`),
+    // Use pg_class.reltuples for instant unfiltered count
+    estimatedRowCount("blocks"),
   ]);
 
   return {
@@ -203,6 +250,7 @@ export async function getExtrinsicsList(
 
   const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : ``;
 
+  const hasFilters = conditions.length > 0;
   const countKey = `extrinsics:${where}:${params.join(",")}`;
   const [dataRes, total] = await Promise.all([
     query<Record<string, unknown>>(
@@ -210,7 +258,9 @@ export async function getExtrinsicsList(
        FROM extrinsics ${where} ORDER BY block_height DESC, index DESC LIMIT $${idx++} OFFSET $${idx++}`,
       [...params, limit, offset],
     ),
-    cachedCount(countKey, `SELECT COUNT(*) AS count FROM extrinsics ${where}`, params),
+    hasFilters
+      ? cachedCount(countKey, `SELECT COUNT(*) AS count FROM extrinsics ${where}`, params)
+      : estimatedRowCount("extrinsics"),
   ]);
   return {
     data: dataRes.rows.map(mapExtrinsic),
@@ -331,6 +381,7 @@ export async function getEventsList(
   }
   const whereCount = countConditions.length > 0 ? `WHERE ${countConditions.join(" AND ")}` : ``;
 
+  const hasFilters = conditions.length > 0;
   const eventsCountKey = `events:${whereCount}:${countParams.join(",")}`;
   const [dataRes, total] = await Promise.all([
     query<Record<string, unknown>>(
@@ -338,7 +389,10 @@ export async function getEventsList(
        FROM events ${whereData} ORDER BY block_height DESC, index DESC LIMIT $1 OFFSET $2`,
       dataParams,
     ),
-    cachedCount(eventsCountKey, `SELECT COUNT(*) AS count FROM events ${whereCount}`, countParams),
+    // Use pg_class.reltuples for instant unfiltered counts (~0ms vs 1.2s for 27M rows)
+    hasFilters
+      ? cachedCount(eventsCountKey, `SELECT COUNT(*) AS count FROM events ${whereCount}`, countParams)
+      : estimatedRowCount("events"),
   ]);
   return {
     data: dataRes.rows.map(mapEvent),
@@ -346,32 +400,36 @@ export async function getEventsList(
   };
 }
 
-/** Get distinct modules and their calls from the extrinsics table */
+/** Get distinct modules and their calls from the extrinsics table (cached 2min) */
 export async function getExtrinsicModules(): Promise<{ module: string; calls: string[] }[]> {
-  const result = await query<{ module: string; call: string }>(
-    `SELECT DISTINCT module, call FROM extrinsics ORDER BY module, call`,
-  );
-  const map = new Map<string, string[]>();
-  for (const row of result.rows) {
-    const existing = map.get(row.module) ?? [];
-    existing.push(row.call);
-    map.set(row.module, existing);
-  }
-  return Array.from(map.entries()).map(([module, calls]) => ({ module, calls }));
+  return cachedQuery("extrinsicModules", async () => {
+    const result = await query<{ module: string; call: string }>(
+      `SELECT DISTINCT module, call FROM extrinsics ORDER BY module, call`,
+    );
+    const map = new Map<string, string[]>();
+    for (const row of result.rows) {
+      const existing = map.get(row.module) ?? [];
+      existing.push(row.call);
+      map.set(row.module, existing);
+    }
+    return Array.from(map.entries()).map(([module, calls]) => ({ module, calls }));
+  });
 }
 
-/** Get distinct modules and their event types from the events table */
+/** Get distinct modules and their event types from the events table (cached 2min) */
 export async function getEventModules(): Promise<{ module: string; events: string[] }[]> {
-  const result = await query<{ module: string; event: string }>(
-    `SELECT DISTINCT module, event FROM events ORDER BY module, event`,
-  );
-  const map = new Map<string, string[]>();
-  for (const row of result.rows) {
-    const existing = map.get(row.module) ?? [];
-    existing.push(row.event);
-    map.set(row.module, existing);
-  }
-  return Array.from(map.entries()).map(([module, events]) => ({ module, events }));
+  return cachedQuery("eventModules", async () => {
+    const result = await query<{ module: string; event: string }>(
+      `SELECT DISTINCT module, event FROM events ORDER BY module, event`,
+    );
+    const map = new Map<string, string[]>();
+    for (const row of result.rows) {
+      const existing = map.get(row.module) ?? [];
+      existing.push(row.event);
+      map.set(row.module, existing);
+    }
+    return Array.from(map.entries()).map(([module, events]) => ({ module, events }));
+  });
 }
 
 export async function getTransfersList(
@@ -841,7 +899,7 @@ export async function getDigestLogs(
   }[];
   total: number;
 }> {
-  const [dataResult, countResult] = await Promise.all([
+  const [dataResult, total] = await Promise.all([
     query<{
       block_height: string;
       log_index: string;
@@ -849,22 +907,34 @@ export async function getDigestLogs(
       engine: string | null;
       log_data: string;
     }>(
-      `SELECT b.height as block_height,
+      // CTE limits blocks first, then expands JSONB only for the needed window.
+      // This avoids scanning+expanding all 11M+ blocks on every request.
+      `WITH ranked_blocks AS (
+         SELECT height, digest_logs
+         FROM blocks
+         WHERE digest_logs IS NOT NULL AND jsonb_array_length(digest_logs) > 0
+         ORDER BY height DESC
+         LIMIT $1 + $2
+       )
+       SELECT b.height as block_height,
               (row_number() OVER (PARTITION BY b.height ORDER BY idx.ordinality)) as log_index,
               idx.elem->>'type' as log_type,
               idx.elem->>'engine' as engine,
               idx.elem->>'data' as log_data
-       FROM blocks b,
+       FROM ranked_blocks b,
             LATERAL jsonb_array_elements(b.digest_logs) WITH ORDINALITY AS idx(elem, ordinality)
-       WHERE b.digest_logs IS NOT NULL AND jsonb_array_length(b.digest_logs) > 0
        ORDER BY b.height DESC, idx.ordinality
        LIMIT $1 OFFSET $2`,
       [limit, offset],
     ),
-    query<{ count: string }>(
+    // Cache the expensive SUM(jsonb_array_length) for 2 minutes
+    cachedCount(
+      "logs_total",
       `SELECT SUM(jsonb_array_length(digest_logs))::text as count
        FROM blocks
        WHERE digest_logs IS NOT NULL AND jsonb_array_length(digest_logs) > 0`,
+      [],
+      SLOW_CACHE_TTL_MS,
     ),
   ]);
 
@@ -876,7 +946,7 @@ export async function getDigestLogs(
       engine: r.engine,
       data: r.log_data,
     })),
-    total: parseInt(countResult.rows[0]?.count ?? "0", 10),
+    total,
   };
 }
 
