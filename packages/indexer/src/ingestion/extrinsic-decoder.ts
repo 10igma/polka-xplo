@@ -18,11 +18,22 @@ import { hexToBytes, bytesToHex } from "../hex-utils.js";
 // module resolution with "bundler" moduleResolution may not resolve
 // these sub-packages correctly at compile time.
 const require = createRequire(import.meta.url);
+
+/** Shape of a SCALE type definition from the metadata lookup table */
+type ScaleTypeDef = { tag: string; value: unknown };
+
+/** Shape returned by getLookupFn for a resolved type */
+interface LookupResult {
+  type: string;
+  value: unknown;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- PAPI types are untyped
 const { decAnyMetadata } = require("@polkadot-api/substrate-bindings") as {
-  decAnyMetadata: (bytes: Uint8Array) => { metadata: { tag: string; value: any } };
+  decAnyMetadata: (bytes: Uint8Array) => { metadata: { tag: string; value: unknown } };
 };
 const { getLookupFn } = require("@polkadot-api/metadata-builders") as {
-  getLookupFn: (metadata: any) => (typeId: number) => any;
+  getLookupFn: (metadata: unknown) => (typeId: number) => LookupResult;
 };
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -118,7 +129,7 @@ function skipScaleType(
   bytes: Uint8Array,
   offset: number,
   typeId: number,
-  registry: Map<number, { tag: string; value: any }>,
+  registry: Map<number, ScaleTypeDef>,
   depth = 0,
 ): number {
   if (depth > 64) throw new Error("Type traversal exceeded depth limit");
@@ -206,7 +217,7 @@ function readScaleValue(
   bytes: Uint8Array,
   startOffset: number,
   typeId: number,
-  registry: Map<number, { tag: string; value: any }>,
+  registry: Map<number, ScaleTypeDef>,
   depth = 0,
 ): { value: unknown; offset: number } {
   if (depth > 16) {
@@ -335,7 +346,7 @@ interface PalletCallLookup {
   callsByPalletIndex: Map<number, Map<number, VariantInfo>>;
   signedExtensions: string[];
   eventsByPalletIndex: Map<number, Map<number, VariantInfo>>;
-  rawTypes: Map<number, { tag: string; value: any }>;
+  rawTypes: Map<number, ScaleTypeDef>;
 }
 
 export interface DecodedCallInfo {
@@ -558,7 +569,7 @@ export class ExtrinsicDecoder {
    */
   async decodeEvents(blockHash: string, lookup: PalletCallLookup): Promise<DecodedEvent[]> {
     try {
-      const storageHex: string | null = await this.rpcCall("state_getStorage", [
+      const storageHex = await this.rpcCall<string | null>("state_getStorage", [
         SYSTEM_EVENTS_KEY,
         blockHash,
       ]);
@@ -684,24 +695,28 @@ export class ExtrinsicDecoder {
   }
 
   private async fetchSpecVersion(blockHash: string): Promise<number> {
-    const json = await this.rpcCall("state_getRuntimeVersion", [blockHash]);
+    const json = await this.rpcCall<{ specVersion?: number }>("state_getRuntimeVersion", [blockHash]);
     return json?.specVersion ?? 0;
   }
 
   private async fetchAndDecodeMetadata(blockHash: string): Promise<PalletCallLookup> {
-    const metaHex: string = await this.rpcCall("state_getMetadata", [blockHash]);
+    const metaHex = await this.rpcCall<string>("state_getMetadata", [blockHash]);
 
     const metaBytes = hexToBytes(metaHex);
 
-    const decoded: any = decAnyMetadata(metaBytes);
-    const v = decoded.metadata.value;
+    const decoded = decAnyMetadata(metaBytes);
+    const v = decoded.metadata.value as {
+      pallets: Array<{ name: string; index: number; calls?: number; events?: number }>;
+      lookup: Array<{ id: number; def: ScaleTypeDef }>;
+      extrinsic: { signedExtensions?: Array<{ identifier: string }> };
+    };
 
     // Build pallet index → { name, calls } lookup
     const palletsByIndex = new Map<number, { name: string; calls: Map<number, string> }>();
 
-    const lookupFn: any = getLookupFn(v);
+    const lookupFn = getLookupFn(v);
 
-    for (const pallet of v.pallets as Array<{ name: string; index: number; calls?: number }>) {
+    for (const pallet of v.pallets) {
       const calls = new Map<number, string>();
 
       if (pallet.calls != null) {
@@ -724,14 +739,14 @@ export class ExtrinsicDecoder {
 
     // Build raw type registry for SCALE traversal
 
-    const rawTypes = new Map<number, { tag: string; value: any }>();
-    for (const entry of v.lookup as Array<{ id: number; def: { tag: string; value: any } }>) {
+    const rawTypes = new Map<number, ScaleTypeDef>();
+    for (const entry of v.lookup) {
       rawTypes.set(entry.id, entry.def);
     }
 
     // Build call lookup: pallet index → Map<call_variant_idx → VariantInfo with field types>
     const callsByPalletIndex = new Map<number, Map<number, VariantInfo>>();
-    for (const pallet of v.pallets as Array<{ name: string; index: number; calls?: number }>) {
+    for (const pallet of v.pallets) {
       if (pallet.calls != null) {
         const callMap = new Map<number, VariantInfo>();
         const typeEntry = rawTypes.get(pallet.calls);
@@ -756,7 +771,7 @@ export class ExtrinsicDecoder {
 
     // Build event lookup: pallet index → Map<event_variant_idx → VariantInfo>
     const eventsByPalletIndex = new Map<number, Map<number, VariantInfo>>();
-    for (const pallet of v.pallets as Array<{ name: string; index: number; events?: number }>) {
+    for (const pallet of v.pallets) {
       if (pallet.events != null) {
         const evtMap = new Map<number, VariantInfo>();
         const typeEntry = rawTypes.get(pallet.events);
@@ -787,7 +802,7 @@ export class ExtrinsicDecoder {
     return { palletsByIndex, callsByPalletIndex, signedExtensions, eventsByPalletIndex, rawTypes };
   }
 
-  private async rpcCall(method: string, params: unknown[]): Promise<any> {
-    return this.rpcPool.call(method, params);
+  private async rpcCall<T = unknown>(method: string, params: unknown[]): Promise<T> {
+    return this.rpcPool.call<T>(method, params);
   }
 }

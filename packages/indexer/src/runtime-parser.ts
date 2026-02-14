@@ -10,8 +10,13 @@ import type { RpcPool } from "./rpc-pool.js";
 import { hexToBytes } from "./hex-utils.js";
 
 const require2 = createRequire(import.meta.url);
+
+/** Shape of a SCALE type definition from the metadata lookup table */
+type ScaleTypeDef = { tag: string; value: unknown };
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- PAPI types are untyped
 const { decAnyMetadata } = require2("@polkadot-api/substrate-bindings") as {
-  decAnyMetadata: (bytes: Uint8Array) => { metadata: { tag: string; value: any } };
+  decAnyMetadata: (bytes: Uint8Array) => { metadata: { tag: string; value: unknown } };
 };
 
 export interface PalletSummary {
@@ -38,7 +43,7 @@ const runtimeCache = new Map<number, RuntimeSummary>();
  */
 function countVariants(
   typeId: number | undefined | null,
-  rawTypes: Map<number, { tag: string; value: any }>,
+  rawTypes: Map<number, ScaleTypeDef>,
 ): number {
   if (typeId == null) return 0;
   const entry = rawTypes.get(typeId);
@@ -79,26 +84,29 @@ export async function getRuntimeSummary(
   // Fetch raw metadata
   const metaHex = await rpcPool.call<string>("state_getMetadata", [blockHash]);
   const metaBytes = hexToBytes(metaHex);
-  const decoded: any = decAnyMetadata(metaBytes);
-  const v = decoded.metadata.value;
+  const decoded = decAnyMetadata(metaBytes);
+  const v = decoded.metadata.value as {
+    lookup: Array<{ id: number; def: ScaleTypeDef }>;
+    pallets: Array<{
+      name: string;
+      index: number;
+      calls?: number;
+      events?: number;
+      errors?: number;
+      storage?: { items: Array<unknown> };
+      constants?: Array<unknown>;
+    }>;
+  };
 
   // Build raw type registry (same as ExtrinsicDecoder)
-  const rawTypes = new Map<number, { tag: string; value: any }>();
-  for (const entry of v.lookup as Array<{ id: number; def: { tag: string; value: any } }>) {
+  const rawTypes = new Map<number, ScaleTypeDef>();
+  for (const entry of v.lookup) {
     rawTypes.set(entry.id, entry.def);
   }
 
   // Extract pallet summaries
   const pallets: PalletSummary[] = [];
-  for (const pallet of v.pallets as Array<{
-    name: string;
-    index: number;
-    calls?: number;
-    events?: number;
-    errors?: number;
-    storage?: { items: Array<unknown> };
-    constants?: Array<unknown>;
-  }>) {
+  for (const pallet of v.pallets) {
     pallets.push({
       name: pallet.name,
       index: pallet.index,
@@ -138,11 +146,11 @@ export async function getExistentialDeposit(rpcPool: RpcPool): Promise<string> {
 
   const metaHex = await rpcPool.call<string>("state_getMetadata", []);
   const metaBytes = hexToBytes(metaHex);
-  const decoded: any = decAnyMetadata(metaBytes);
-  const pallets = decoded.metadata.value.pallets as Array<{
+  const decoded = decAnyMetadata(metaBytes);
+  const pallets = (decoded.metadata.value as { pallets: Array<{
     name: string;
     constants?: Array<{ name: string; value: Uint8Array }>;
-  }>;
+  }> }).pallets;
 
   for (const pallet of pallets) {
     if (pallet.name === "Balances") {
