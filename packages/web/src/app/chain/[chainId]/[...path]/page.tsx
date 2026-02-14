@@ -1,4 +1,5 @@
 import { DEFAULT_CHAINS, type ChainConfig } from "@polka-xplo/shared";
+import Link from "next/link";
 
 /**
  * Multi-Chain Route — /chain/[chainId]/[...path]
@@ -22,8 +23,11 @@ export default async function ChainPage({
 
   if (!chain) {
     return (
-      <div className="text-center py-20 text-zinc-500">
-        Chain &quot;{chainId}&quot; is not configured.
+      <div className="space-y-6">
+        <Link href="/chain-state" className="text-xs text-accent hover:underline">← Chain State</Link>
+        <div className="text-center py-20 text-zinc-500">
+          Chain &quot;{chainId}&quot; is not configured.
+        </div>
       </div>
     );
   }

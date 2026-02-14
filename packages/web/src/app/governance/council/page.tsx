@@ -1,4 +1,5 @@
 import { getCouncilMotions, type GovernanceMotion } from "@/lib/api";
+import { Pagination } from "@/components/Pagination";
 import { truncateHash } from "@/lib/format";
 import Link from "next/link";
 
@@ -8,14 +9,14 @@ const STATUS_COLORS: Record<string, string> = {
   proposed: "badge-info",
   approved: "badge-success",
   executed: "badge-success",
-  closed: "bg-zinc-800/40 text-zinc-400 border border-zinc-700/40",
-  disapproved: "bg-red-900/40 text-red-300 border border-red-800/40",
+  closed: "badge-neutral",
+  disapproved: "badge-error",
 };
 
 function StatusBadge({ status }: { status: string }) {
   const cls = STATUS_COLORS[status.toLowerCase()] ?? "badge-info";
   return (
-    <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${cls}`}>
+    <span className={cls}>
       {status}
     </span>
   );
@@ -47,14 +48,12 @@ export default async function CouncilMotionsPage({
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-zinc-100">Council Motions</h1>
-          <p className="text-sm text-zinc-400 mt-1">{total} total motions</p>
-        </div>
+      <div>
         <Link href="/governance" className="text-xs text-accent hover:underline">
           ← Governance
         </Link>
+        <h1 className="text-2xl font-bold text-zinc-100 mt-1">Council Motions</h1>
+        <p className="text-sm text-zinc-400 mt-0.5">{total} total motions</p>
       </div>
 
       {/* Status filter */}
@@ -85,7 +84,7 @@ export default async function CouncilMotionsPage({
       )}
 
       <div className="card overflow-x-auto">
-        <table className="min-w-full text-sm">
+        <table className="w-full text-sm">
           <thead>
             <tr className="text-left text-zinc-500 border-b border-zinc-800">
               <th className="pb-2 pr-4">#</th>
@@ -99,8 +98,8 @@ export default async function CouncilMotionsPage({
           </thead>
           <tbody>
             {motions.map((m) => (
-              <tr key={m.proposal_index} className="border-b border-zinc-800/50 hover:bg-zinc-800/30">
-                <td className="py-2 pr-4">
+              <tr key={m.proposal_index} className="table-row">
+                <td className="py-2.5 pr-4">
                   <Link
                     href={`/governance/council/${m.proposal_index}`}
                     className="text-accent hover:underline font-mono"
@@ -108,10 +107,10 @@ export default async function CouncilMotionsPage({
                     {m.proposal_index}
                   </Link>
                 </td>
-                <td className="py-2 pr-4 font-mono text-xs text-zinc-300">
+                <td className="py-2.5 pr-4 font-mono text-xs text-zinc-300">
                   {truncateHash(m.proposal_hash, 8)}
                 </td>
-                <td className="py-2 pr-4">
+                <td className="py-2.5 pr-4">
                   <Link
                     href={`/account/${m.proposer}`}
                     className="text-accent hover:underline font-mono text-xs"
@@ -119,12 +118,12 @@ export default async function CouncilMotionsPage({
                     {truncateHash(m.proposer, 6)}
                   </Link>
                 </td>
-                <td className="py-2 pr-4">
+                <td className="py-2.5 pr-4">
                   <StatusBadge status={m.status} />
                 </td>
-                <td className="py-2 pr-4 text-center text-zinc-300">{m.threshold}</td>
-                <td className="py-2 pr-4 text-right text-green-400">{m.aye_count}</td>
-                <td className="py-2 text-right text-red-400">{m.nay_count}</td>
+                <td className="py-2.5 pr-4 text-center text-zinc-300">{m.threshold}</td>
+                <td className="py-2.5 pr-4 text-right text-green-400">{m.aye_count}</td>
+                <td className="py-2.5 text-right text-red-400">{m.nay_count}</td>
               </tr>
             ))}
             {motions.length === 0 && (
@@ -139,29 +138,12 @@ export default async function CouncilMotionsPage({
       </div>
 
       {/* Pagination */}
-      {totalPages > 1 && (
-        <div className="flex justify-center gap-2">
-          {page > 1 && (
-            <Link
-              href={`/governance/council?page=${page - 1}${status ? `&status=${status}` : ""}`}
-              className="px-3 py-1 rounded bg-zinc-800 text-zinc-300 hover:bg-zinc-700 text-sm"
-            >
-              ← Prev
-            </Link>
-          )}
-          <span className="px-3 py-1 text-sm text-zinc-400">
-            Page {page} of {totalPages}
-          </span>
-          {page < totalPages && (
-            <Link
-              href={`/governance/council?page=${page + 1}${status ? `&status=${status}` : ""}`}
-              className="px-3 py-1 rounded bg-zinc-800 text-zinc-300 hover:bg-zinc-700 text-sm"
-            >
-              Next →
-            </Link>
-          )}
-        </div>
-      )}
+      <Pagination
+        currentPage={page}
+        totalPages={totalPages}
+        basePath="/governance/council"
+        extraParams={status ? { status } : undefined}
+      />
     </div>
   );
 }

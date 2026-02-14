@@ -28,8 +28,11 @@ export default async function XcmChannelDetailPage({
   const parts = channelId.split("-");
   if (parts.length !== 2) {
     return (
-      <div className="text-center py-12 text-zinc-500">
-        Invalid channel format. Expected: from_para_id-to_para_id
+      <div className="space-y-6">
+        <Link href="/xcm/channels" className="text-xs text-accent hover:underline">← Channels</Link>
+        <div className="text-center py-12 text-zinc-500">
+          Invalid channel format. Expected: from_para_id-to_para_id
+        </div>
       </div>
     );
   }
@@ -53,17 +56,14 @@ export default async function XcmChannelDetailPage({
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-2 text-xs">
-        <Link href="/xcm" className="text-accent hover:underline">XCM</Link>
-        <span className="text-zinc-600">/</span>
-        <Link href="/xcm/channels" className="text-accent hover:underline">Channels</Link>
-        <span className="text-zinc-600">/</span>
-        <span className="text-zinc-400">{paraName(fromParaId)} → {paraName(toParaId)}</span>
+      <div>
+        <Link href="/xcm/channels" className="text-xs text-accent hover:underline">
+          ← Channels
+        </Link>
+        <h1 className="text-2xl font-bold text-zinc-100 mt-1">
+          {paraName(fromParaId)} → {paraName(toParaId)}
+        </h1>
       </div>
-
-      <h1 className="text-2xl font-bold text-zinc-100">
-        {paraName(fromParaId)} → {paraName(toParaId)}
-      </h1>
 
       {error && (
         <div className="rounded-lg border border-yellow-800/50 bg-yellow-950/30 p-3 text-sm text-yellow-300">
@@ -93,7 +93,7 @@ export default async function XcmChannelDetailPage({
         <div className="space-y-2">
           <h2 className="text-lg font-semibold text-zinc-200">Recent Messages</h2>
           <div className="card overflow-x-auto">
-            <table className="min-w-full text-sm">
+            <table className="w-full text-sm">
               <thead>
                 <tr className="text-left text-zinc-500 border-b border-zinc-800">
                   <th className="pb-2 pr-4">Hash</th>
@@ -103,13 +103,13 @@ export default async function XcmChannelDetailPage({
                   <th className="pb-2">Status</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-zinc-800/50">
+              <tbody>
                 {recentMessages.map((m) => (
-                  <tr key={m.id} className="hover:bg-zinc-800/30">
-                    <td className="py-2 pr-4 font-mono text-xs text-accent">
+                  <tr key={m.id} className="table-row">
+                    <td className="py-2.5 pr-4 font-mono text-xs text-accent">
                       {m.message_hash ? truncateHash(m.message_hash) : "—"}
                     </td>
-                    <td className="py-2 pr-4">
+                    <td className="py-2.5 pr-4">
                       <span
                         className={`text-xs px-1.5 py-0.5 rounded font-medium ${
                           m.direction === "inbound" ? "text-blue-400 bg-blue-950/50" : "text-orange-400 bg-orange-950/50"
@@ -118,13 +118,13 @@ export default async function XcmChannelDetailPage({
                         {m.direction === "inbound" ? "↓ IN" : "↑ OUT"}
                       </span>
                     </td>
-                    <td className="py-2 pr-4 text-xs text-zinc-400">{m.protocol}</td>
-                    <td className="py-2 pr-4">
+                    <td className="py-2.5 pr-4 text-xs text-zinc-400">{m.protocol}</td>
+                    <td className="py-2.5 pr-4">
                       <Link href={`/block/${m.block_height}`} className="text-accent hover:underline font-mono text-xs">
                         #{m.block_height.toLocaleString()}
                       </Link>
                     </td>
-                    <td className="py-2">
+                    <td className="py-2.5">
                       {m.success ? (
                         <span className="text-green-400 text-xs">✓</span>
                       ) : m.success === false ? (
@@ -146,7 +146,7 @@ export default async function XcmChannelDetailPage({
         <div className="space-y-2">
           <h2 className="text-lg font-semibold text-zinc-200">Recent Transfers</h2>
           <div className="card overflow-x-auto">
-            <table className="min-w-full text-sm">
+            <table className="w-full text-sm">
               <thead>
                 <tr className="text-left text-zinc-500 border-b border-zinc-800">
                   <th className="pb-2 pr-4">From</th>
@@ -155,10 +155,10 @@ export default async function XcmChannelDetailPage({
                   <th className="pb-2">Block</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-zinc-800/50">
+              <tbody>
                 {recentTransfers.map((t) => (
-                  <tr key={t.id} className="hover:bg-zinc-800/30">
-                    <td className="py-2 pr-4 text-xs">
+                  <tr key={t.id} className="table-row">
+                    <td className="py-2.5 pr-4 text-xs">
                       {t.from_address ? (
                         <Link href={`/account/${t.from_address}`} className="text-accent hover:underline font-mono">
                           {truncateHash(t.from_address)}
@@ -167,7 +167,7 @@ export default async function XcmChannelDetailPage({
                         <span className="text-zinc-600">—</span>
                       )}
                     </td>
-                    <td className="py-2 pr-4 text-xs">
+                    <td className="py-2.5 pr-4 text-xs">
                       {t.to_address ? (
                         <Link href={`/account/${t.to_address}`} className="text-accent hover:underline font-mono">
                           {truncateHash(t.to_address)}
@@ -176,10 +176,10 @@ export default async function XcmChannelDetailPage({
                         <span className="text-zinc-600">—</span>
                       )}
                     </td>
-                    <td className="py-2 pr-4 text-right font-mono text-xs text-zinc-200">
+                    <td className="py-2.5 pr-4 text-right font-mono text-xs text-zinc-200">
                       {t.amount} {t.asset_symbol ?? ""}
                     </td>
-                    <td className="py-2">
+                    <td className="py-2.5">
                       <Link href={`/block/${t.block_height}`} className="text-accent hover:underline font-mono text-xs">
                         #{t.block_height.toLocaleString()}
                       </Link>

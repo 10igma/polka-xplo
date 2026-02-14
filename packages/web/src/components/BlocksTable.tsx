@@ -68,11 +68,7 @@ export function BlocksTable({ blocks }: { blocks: BlockSummary[] }) {
 function StatusBadge({ status }: { status: string }) {
   const isFinalized = status === "finalized";
   return (
-    <span
-      className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${
-        isFinalized ? "bg-green-900/40 text-green-400" : "bg-yellow-900/40 text-yellow-400"
-      }`}
-    >
+    <span className={isFinalized ? "badge-success" : "badge-warning"}>
       {isFinalized ? "Finalized" : "Best"}
     </span>
   );

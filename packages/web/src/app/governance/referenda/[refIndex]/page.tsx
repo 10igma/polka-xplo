@@ -16,32 +16,26 @@ const CONVICTION_LABELS = [
 
 function VoteRow({ vote }: { vote: GovernanceVote }) {
   return (
-    <tr className="border-b border-zinc-800/50 hover:bg-zinc-800/30">
-      <td className="py-2 pr-4">
+    <tr className="table-row">
+      <td className="py-2.5 pr-4">
         <Link href={`/account/${vote.voter}`} className="text-accent hover:underline font-mono text-xs">
           {truncateHash(vote.voter, 8)}
         </Link>
       </td>
-      <td className="py-2 pr-4">
-        <span
-          className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${
-            vote.is_aye
-              ? "bg-green-900/40 text-green-300 border border-green-800/40"
-              : "bg-red-900/40 text-red-300 border border-red-800/40"
-          }`}
-        >
+      <td className="py-2.5 pr-4">
+        <span className={vote.is_aye ? "badge-success" : "badge-error"}>
           {vote.is_aye ? "Aye" : "Nay"}
         </span>
       </td>
-      <td className="py-2 pr-4 text-zinc-300 text-xs">
+      <td className="py-2.5 pr-4 text-zinc-300 text-xs">
         {vote.conviction !== undefined && vote.conviction !== null
           ? CONVICTION_LABELS[vote.conviction] ?? `x${vote.conviction}`
           : "—"}
       </td>
-      <td className="py-2 pr-4 text-zinc-300 font-mono text-xs text-right">
+      <td className="py-2.5 pr-4 text-zinc-300 font-mono text-xs text-right">
         {vote.balance ? BigInt(vote.balance).toLocaleString() : "—"}
       </td>
-      <td className="py-2 text-zinc-400 font-mono text-xs text-right">
+      <td className="py-2.5 text-zinc-400 font-mono text-xs text-right">
         {vote.block_height.toLocaleString()}
       </td>
     </tr>
@@ -68,8 +62,11 @@ export default async function ReferendumDetailPage({
 
   if (error || !referendum) {
     return (
-      <div className="text-center py-20 text-zinc-500">
-        {error ?? "Referendum not found."}
+      <div className="space-y-6">
+        <Link href="/governance/referenda" className="text-xs text-accent hover:underline">← Referenda</Link>
+        <div className="text-center py-20 text-zinc-500">
+          {error ?? "Referendum not found."}
+        </div>
       </div>
     );
   }
@@ -80,11 +77,11 @@ export default async function ReferendumDetailPage({
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-zinc-100">Referendum #{referendum.ref_index}</h1>
+      <div>
         <Link href="/governance/referenda" className="text-xs text-accent hover:underline">
-          ← All Referenda
+          ← Referenda
         </Link>
+        <h1 className="text-2xl font-bold text-zinc-100 mt-1">Referendum #{referendum.ref_index}</h1>
       </div>
 
       {/* Details Card */}
@@ -138,7 +135,7 @@ export default async function ReferendumDetailPage({
 
         {votes.length > 0 ? (
           <div className="overflow-x-auto">
-            <table className="min-w-full text-sm">
+            <table className="w-full text-sm">
               <thead>
                 <tr className="text-left text-zinc-500 border-b border-zinc-800">
                   <th className="pb-2 pr-4">Voter</th>
