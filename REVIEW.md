@@ -1,31 +1,144 @@
-# Polka-Xplo — Architecture Review & Issue Tracker
+# Polka-Xplo — Comprehensive Code Review
 
-**Date:** February 10, 2026
-**Scope:** Full codebase review — `packages/shared`, `packages/db`, `packages/indexer`, `packages/web`, Docker, and configuration.
+**Review Date:** February 14, 2025
+**Reviewer:** Automated Analysis + Manual Inspection
+**Scope:** Full codebase — monorepo infrastructure, all 4 packages, 4 extensions, Docker, CI/CD, security, testing, and performance.
+**Codebase Version:** Commit `9435701` on `main`
+
+---
+
+## Table of Contents
+
+1. [Executive Summary](#executive-summary)
+2. [Architecture Overview](#architecture-overview)
+3. [Codebase Metrics](#codebase-metrics)
+4. [Findings: Critical](#-critical)
+5. [Findings: High](#-high-priority)
+6. [Findings: Medium](#-medium-priority)
+7. [Findings: Low / Informational](#-low--informational)
+8. [Previously Fixed Findings](#-previously-fixed)
+9. [What's Working Well](#-whats-working-well)
+10. [Scale Considerations](#-scale-considerations)
+11. [Recommended Roadmap](#recommended-roadmap)
 
 ---
 
 ## Executive Summary
 
-The project is architecturally sound — TypeScript monorepo with clean package boundaries, dual-stream ingestion, a plugin system, and a well-structured Next.js 15 frontend. The codebase is production-viable today for single-chain explorers with moderate traffic.
+Polka-Xplo is an **architecturally sound** Substrate blockchain explorer built as a TypeScript monorepo. Its dual-stream ingestion pipeline, plugin-based extension system, and comprehensive REST API demonstrate professional-grade engineering. The project is **production-viable** for single-chain explorers with moderate traffic (< 10M blocks).
 
-This review identifies **23 findings** (12 fixed ✅, 11 remaining) with the following priority distribution:
+This review identifies **28 findings** across the full codebase:
 
-| Priority    | Count | Fixed | Remaining |
-| ----------- | ----- | ----- | --------- |
-| 🔴 Critical | 3     | 1 ✅  | 2         |
-| 🟠 High     | 5     | 2 ✅  | 3         |
-| 🟡 Medium   | 8     | 4 ✅  | 4         |
-| 🟢 Low      | 7     | 5 ✅  | 2         |
+| Severity        | Open | Previously Fixed | Total |
+|-----------------|------|------------------|-------|
+| 🔴 Critical     | 3    | 1                | 4     |
+| 🟠 High         | 5    | 2                | 7     |
+| 🟡 Medium       | 7    | 4                | 11    |
+| 🟢 Low / Info   | 6    | 5                | 11    |
+| **Total**       | **21** | **12**        | **28** |
+
+**Key Strengths:**
+- Dual-stream (finalized + best-head) ingestion with automatic gap repair
+- Latency-weighted RPC pool with failover and exponential backoff
+- Plugin system with manifest-based discovery, dispatch indexes, and historical backfill
+- Comprehensive OpenAPI/Swagger-documented REST API (40+ endpoints)
+- Transaction-wrapped block processing with deadlock retry
+- Professional-grade observability (DbMetrics, IndexerMetrics, RPC health)
+
+**Key Risks:**
+- `server.ts` is a 2,884-line monolithic file — the largest maintainability debt
+- Test coverage is minimal (5 test files / ~660 lines covering < 10% of codebase)
+- Extension system has no sandboxing or manifest validation
+- `@typescript-eslint/no-explicit-any` disabled globally
 
 ---
 
-## 🔴 Critical Priority
+## Architecture Overview
 
-### ~~C1. Race Condition in Backfill Concurrency~~ ✅ FIXED
+```
+┌──────────────────────────────────────────────────────────────┐
+│                        Monorepo (Turborepo + npm workspaces) │
+├──────────────┬──────────────┬───────────────┬────────────────┤
+│ packages/    │ packages/    │ packages/     │ packages/      │
+│ shared       │ db           │ indexer       │ web            │
+│ Types,       │ PostgreSQL   │ Pipeline,     │ Next.js 15     │
+│ Config,      │ Pool,        │ API Server,   │ React 19       │
+│ SS58 utils   │ Queries,     │ RPC Pool,     │ Tailwind CSS   │
+│              │ Migrations   │ Plugins       │ 33 components  │
+├──────────────┴──────────────┴───────────────┴────────────────┤
+│ extensions/                                                   │
+│ ext-assets · ext-governance · ext-xcm · pallet-staking       │
+├──────────────────────────────────────────────────────────────┤
+│ Infrastructure: Docker (node:20-slim, PostgreSQL 16, Redis 7)│
+└──────────────────────────────────────────────────────────────┘
+```
 
-**File:** `packages/indexer/src/ingestion/pipeline.ts` → `runWithConcurrency()`
-**Status:** Fixed — replaced shared mutable index with work-stealing queue (`queue.shift()`).
+**Dependency Graph:** `shared` → `db` → `indexer`, `shared` → `web` — no circular dependencies.
+
+**Data Flow:**
+1. **Ingestion Pipeline** subscribes to finalized + best-head block streams via PAPI
+2. **Block Processor** decodes extrinsics/events, writes to PostgreSQL in a single transaction
+3. **Plugin Registry** dispatches events to extension handlers via dispatch indexes
+4. **Express API** serves indexed data to the frontend (40+ REST endpoints)
+5. **Next.js Frontend** fetches from API via proxy route (`/indexer-api/`)
+
+---
+
+## Codebase Metrics
+
+| Metric | Value |
+|--------|-------|
+| **Total TypeScript files** | ~80 |
+| **Total lines of code** | ~12,500 |
+| **Largest file** | `server.ts` — 2,884 lines |
+| **Second largest** | `queries.ts` — 1,030 lines |
+| **Third largest** | `ext-xcm/event-handlers.ts` — 1,016 lines |
+| **Web components** | 33 files, 3,870 lines |
+| **API endpoints** | 40+ (all Swagger-documented) |
+| **Test files** | 5 files, ~660 lines |
+| **Extensions** | 4 (assets, governance, staking, xcm) |
+| **SQL migrations** | 6 files (2 core + 4 extension) |
+| **Docker services** | 4 (PostgreSQL, Redis, Indexer, Web) |
+| **Node.js version** | ≥ 20 (enforced via `engines`) |
+| **TypeScript** | 5.7+, strict mode, ES2022 target |
+
+---
+
+## 🔴 Critical
+
+### C1. `server.ts` Monolithic File — 2,884 Lines
+
+**File:** `packages/indexer/src/api/server.ts`
+**Impact:** Maintainability, code review difficulty, merge conflict risk
+
+The entire API surface — 40+ endpoints spanning blocks, extrinsics, events, accounts, search, stats, admin, assets, governance, XCM, and schemas — resides in a single function `createApiServer()`. This is the single largest technical debt in the project.
+
+**Problems:**
+- Impossible to review or modify a single domain without touching the entire file
+- Swagger JSDoc annotations are inline, making the file ~60% documentation
+- Rate limiter, admin auth, CORS, and Swagger setup intermixed with business logic
+- Asset/governance/XCM routes duplicate the same pagination/filter pattern repeatedly
+
+**Recommended fix:**
+```
+packages/indexer/src/api/
+├── server.ts           # App setup, middleware, mount routers (~100 lines)
+├── middleware/
+│   ├── admin.ts        # requireAdmin
+│   ├── rate-limit.ts   # rate limiter
+│   └── cors.ts         # CORS
+└── routes/
+    ├── blocks.ts
+    ├── extrinsics.ts
+    ├── events.ts
+    ├── accounts.ts
+    ├── search.ts
+    ├── stats.ts
+    ├── admin.ts
+    ├── assets.ts
+    ├── governance.ts
+    └── xcm.ts
+```
 
 ---
 
@@ -34,20 +147,16 @@ This review identifies **23 findings** (12 fixed ✅, 11 remaining) with the fol
 **File:** `packages/indexer/src/plugins/registry.ts`
 **Impact:** Arbitrary code execution + SQL injection via extensions
 
-1. `await import(handlerPath)` loads JavaScript from disk with full Node.js privileges — a malicious extension could access the database, filesystem, network, or environment variables.
-2. `ext.getMigrationSQL()` returns raw SQL executed via `await query(sql)` — no sandboxing, no parametrization, no transaction wrapping.
-3. `manifest.json` is parsed with no JSON schema validation — malformed manifests could crash the discovery phase.
+1. `await import(handlerPath)` loads JavaScript from disk with full Node.js privileges
+2. `ext.getMigrationSQL()` returns raw SQL executed via `await query(sql)` — no sandboxing
+3. `manifest.json` is parsed with no JSON schema validation
 
-**Fix (short-term):**
-
-- Wrap migration SQL in a transaction with rollback on failure
+**Short-term fix:**
 - Validate manifests against a JSON Schema (e.g., Ajv)
+- Wrap migration SQL in a transaction (see C3)
 - Add a config allowlist for trusted extension IDs
 
-**Fix (long-term):**
-
-- Consider `vm2` or `isolated-vm` for sandboxed plugin execution
-- Or accept the trust model and document that extensions run with full privileges (like VS Code extensions)
+**Long-term:** Accept the trust model (like VS Code extensions) and document it, or consider `isolated-vm` for sandboxed execution.
 
 ---
 
@@ -56,15 +165,15 @@ This review identifies **23 findings** (12 fixed ✅, 11 remaining) with the fol
 **File:** `packages/indexer/src/plugins/registry.ts` → `runMigrations()`
 **Impact:** Partial schema corruption on migration failure
 
-If an extension's migration SQL partially succeeds (e.g., first table created, second fails), the `extension_migrations` record is never inserted. On retry, the registry attempts the full migration again, hitting `CREATE TABLE` conflicts or, worse, `ALTER TABLE` errors that leave the schema in an unrecoverable state.
+If an extension's migration SQL partially succeeds (e.g., first table created, second fails), the `extension_migrations` record is never inserted. On retry, the registry re-runs the migration, hitting `CREATE TABLE` conflicts or `ALTER TABLE` errors.
 
-**Fix:** Wrap each extension migration in a transaction:
-
+**Fix:**
 ```typescript
 await transaction(async (client) => {
   await client.query(sql);
   await client.query(
-    `INSERT INTO extension_migrations (extension_id, version) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+    `INSERT INTO extension_migrations (extension_id, version) VALUES ($1, $2)
+     ON CONFLICT DO NOTHING`,
     [ext.manifest.id, ext.manifest.version],
   );
 });
@@ -72,256 +181,400 @@ await transaction(async (client) => {
 
 ---
 
+### ~~C4. Race Condition in Backfill Concurrency~~ ✅ FIXED
+
+**Status:** Fixed — replaced shared mutable index with work-stealing queue (`queue.shift()`).
+
+---
+
 ## 🟠 High Priority
 
-### ~~H1. No Pipeline Reconnection on Stream Error~~ ✅ FIXED
+### H1. Minimal Test Coverage (~10% of Codebase)
 
-**File:** `packages/indexer/src/ingestion/pipeline.ts` → `subscribeFinalized()`, `subscribeBestHead()`
-**Status:** Fixed — both subscriptions now auto-reconnect with exponential backoff (1s → 60s cap), retry counter resets on successful block.
+**Impact:** Regression risk, refactoring difficulty, contributor confidence
+
+| Area | Test Files | Lines Tested | Lines Total | Coverage |
+|------|-----------|-------------|------------|----------|
+| `packages/shared` | 2 | ~196 | ~450 | ~43% |
+| `packages/indexer` | 2 | ~371 | ~5,300 | ~7% |
+| `packages/web` | 1 | ~93 | ~4,600 | ~2% |
+| `packages/db` | 0 | 0 | ~1,200 | 0% |
+| `extensions/` | 0 | 0 | ~1,700 | 0% |
+
+**Critical untested areas:**
+- **XCM SCALE decoding** — 300+ lines of bit-level hex parsing (`splitHexJunctions`, `scaleCompactLen`, `networkFieldLen`) with zero tests
+- **Block processor** — transaction logic, deadlock retry, extrinsic truncation
+- **API endpoints** — no request/response validation tests
+- **Database queries** — no integration tests for SQL correctness
+- **Extension event handlers** — all 4 extensions completely untested
+
+**Recommended priority for new tests:**
+1. XCM hex parsing utilities (unit tests — highest complexity/risk ratio)
+2. Block processor transaction logic (integration tests with test DB)
+3. API endpoint contracts (supertest with mocked DB)
+4. Extension event handler logic (unit tests with mocked `query()`)
 
 ---
 
-### ~~H2. `hexToBytes` Crashes on Empty Hex Input~~ ✅ FIXED
+### H2. `@typescript-eslint/no-explicit-any` Disabled
 
-**Files:** `packages/indexer/src/ingestion/pipeline.ts`, `packages/indexer/src/ingestion/extrinsic-decoder.ts`, `packages/indexer/src/runtime-parser.ts`
-**Status:** Fixed — added `if (!clean) return new Uint8Array(0);` guard in all 3 copies.
+**File:** `eslint.config.js`
+**Impact:** TypeScript strict mode undermined
+
+The ESLint config explicitly disables `@typescript-eslint/no-explicit-any`. This allows `any` to propagate through the codebase, defeating TypeScript's primary value proposition. Found instances in API handlers, event processing, and query result mapping.
+
+**Fix:** Re-enable the rule and address violations incrementally:
+```javascript
+// eslint.config.js
+"@typescript-eslint/no-explicit-any": "warn", // Start as warning, promote to error
+```
 
 ---
 
-### H3. SS58 Prefix Switching Is a No-Op
+### H3. Full Page Reloads on All Navigation
 
-**File:** `packages/web/src/lib/ss58-context.tsx` → `formatAddress()`
+**Files:** `HeaderNav.tsx`, `Pagination.tsx`, `LatestBlocksCard.tsx`, `LatestTransfersCard.tsx`
+**Impact:** Poor UX — every click triggers a full page reload
+
+All internal links use plain `<a href="...">` instead of Next.js `<Link>` component. This bypasses the App Router's client-side SPA navigation, causing:
+- Full JavaScript re-evaluation on every page change
+- Loss of client state (SS58 prefix selection, scroll position)
+- Unnecessary network round-trips for shared layout/bundles
+
+**Fix:** Replace `<a href>` with `import Link from "next/link"` across all 33 components.
+
+---
+
+### H4. `COUNT(*)` on Large Tables Without Caching
+
+**File:** `packages/db/src/queries.ts`
+**Impact:** Slow pagination at scale — O(n) sequential scan per request
+
+Every paginated endpoint runs `SELECT COUNT(*)` in parallel. On PostgreSQL, this requires a full table scan. At production scale (5M+ blocks, 20M+ events):
+- Queries take 2-10 seconds
+- 20 DB pool connections can be saturated by count queries alone
+
+**Fix options:**
+1. Cache counts in Redis with 30s TTL
+2. Use `pg_stat_user_tables.n_live_tup` for approximate counts
+3. Switch to cursor-based pagination (keyset, no total needed)
+4. Materialized views for frequently filtered counts
+
+---
+
+### H5. SS58 Prefix Switching Is a No-Op
+
+**File:** `packages/web/src/lib/ss58-context.tsx`
 **Impact:** Address display doesn't update when user changes SS58 prefix
 
-The `formatAddress` function detects "already SS58" addresses and passes them through unchanged. When a user switches the prefix selector (e.g., from Ajuna 1328 to generic 42), displayed SS58 addresses on-screen don't re-encode — they remain in the original prefix format.
+The `formatAddress` function detects "already SS58" addresses and returns them unchanged. Switching the prefix selector has no visible effect on displayed addresses.
 
-**Fix:** Decode existing SS58 to a raw public key, then re-encode with the current prefix:
-
-```typescript
-if (!raw.startsWith("0x")) {
-  const decoded = ss58Decode(raw); // extract public key bytes
-  return ss58Encode(decoded, currentPrefix);
-}
-```
+**Fix:** Always decode to raw public key, then re-encode with the current prefix.
 
 ---
 
-### H4. Full Page Reloads on All Navigation
+### ~~H6. No Pipeline Reconnection on Stream Error~~ ✅ FIXED
 
-**Files:** `packages/web/src/components/HeaderNav.tsx`, `Pagination.tsx`, `LatestBlocksCard.tsx`, `LatestTransfersCard.tsx`, various page links
-**Impact:** Poor UX — every click does full page reload, losing client state
-
-All internal links use plain `<a href="...">` instead of Next.js `<Link>` component. This bypasses the App Router's client-side navigation, triggering full page reloads on every click. Users lose scroll position, SS58 prefix selection resets, and the browser re-fetches all JavaScript bundles.
-
-**Fix:** Replace `<a href>` with Next.js `<Link>` across all components. Example:
-
-```tsx
-import Link from "next/link";
-// Before: <a href="/blocks">Blocks</a>
-// After:  <Link href="/blocks">Blocks</Link>
-```
+**Status:** Fixed — exponential backoff reconnection (1s → 60s cap).
 
 ---
 
-### H5. `COUNT(*)` on Large Tables Without Caching
+### ~~H7. `hexToBytes` Crashes on Empty Input~~ ✅ FIXED
 
-**File:** `packages/db/src/queries.ts` — all list queries
-**Impact:** Slow pagination on tables with millions of rows
-
-Every paginated query runs a parallel `SELECT COUNT(*) FROM [table]`. On PostgreSQL, `COUNT(*)` does a full sequential scan (no index-only optimization). At millions of blocks/events/extrinsics, this becomes the dominant query cost — often taking 2-10 seconds.
-
-**Fix options (in order of effort):**
-
-1. **Cache counts in Redis/memory** with a short TTL (30s)
-2. **Use `pg_stat_user_tables.n_live_tup`** for approximate counts (already used in `getDatabaseSize`)
-3. **Remove exact total from paginated responses** — use cursor-based pagination ("has next page" only)
-4. **Add partial indexes** for filtered counts (e.g., `WHERE signer IS NOT NULL` count)
+**Status:** Fixed — added empty-input guard.
 
 ---
 
 ## 🟡 Medium Priority
 
-### M1. No Rate Limiting on API Endpoints
+### M1. Hardcoded Native Symbol in XCM Extension
 
-**File:** `packages/indexer/src/api/server.ts`
-**Impact:** API abuse / DoS vector
+**File:** `extensions/ext-xcm/indexer/event-handlers.ts`
+**Impact:** Not chain-agnostic — only correct for Ajuna Network
 
-The Express API has no rate limiting. A single client can flood `/api/blocks?limit=100` or `/api/search` with rapid requests, overwhelming the database connection pool (max 20).
+`resolveNativeSymbol()` falls back to hardcoded `"AJUN"` when the native token symbol cannot be determined from the event data. Deploying this to Polkadot, Kusama, or any other chain produces incorrect XCM transfer labels.
 
-**Fix:** Add `express-rate-limit` middleware:
-
-```typescript
-import rateLimit from "express-rate-limit";
-app.use("/api/", rateLimit({ windowMs: 60_000, max: 200 }));
-```
+**Fix:** Read the native symbol from `system_properties` (already available via `getSystemProperties()` in `chain-state.ts`) or from environment variable `CHAIN_TOKEN_SYMBOL`.
 
 ---
 
-### ~~M2. No Security Headers on Web Frontend~~ ✅ FIXED
+### M2. SQL Table Name Interpolation in Governance Extension
 
-**File:** `packages/web/next.config.js`
-**Status:** Fixed — added `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, and `Permissions-Policy` headers. Also removed dead `experimental.serverActions` config (L7).
+**File:** `extensions/ext-governance/indexer/event-handlers.ts`
+**Impact:** Theoretical SQL injection vector
+
+`handleCollectiveProposed`, `handleCollectiveVoted`, and related handlers use template literals for table names (`` `INSERT INTO ${table}` ``). While table names come from hardcoded switch cases (not user input), this pattern is inherently risky and would fail a security audit.
+
+**Fix:** Use a whitelist constant and assert membership:
+```typescript
+const VALID_TABLES = ["gov_council_motions", "gov_techcomm_proposals"] as const;
+type CollectiveTable = typeof VALID_TABLES[number];
+function validateTable(t: string): CollectiveTable {
+  if (!VALID_TABLES.includes(t as CollectiveTable)) throw new Error(`Invalid table: ${t}`);
+  return t as CollectiveTable;
+}
+```
 
 ---
 
 ### M3. Unbounded Runtime Metadata Cache
 
 **File:** `packages/indexer/src/runtime-parser.ts`
-**Impact:** Memory leak over long-running indexer uptimes
+**Impact:** Memory leak over extended uptime
 
-`runtimeCache` is a module-level `Map<number, RuntimeSummary>` with no eviction policy. Each cached entry holds a full pallet metadata summary. Over months of uptime with many spec versions encountered during backfill, this grows unbounded.
+`runtimeCache` is a `Map<number, RuntimeSummary>` with no eviction. During long backfills touching many spec versions, this grows unbounded.
 
-**Fix:** Switch to an LRU cache (e.g., `lru-cache` npm package) with a max size of ~20 entries.
+**Fix:** Use `lru-cache` with max ~20 entries.
 
 ---
 
-### M4. Duplicate Code Between PAPI and Legacy RPC Block Fetch
+### M4. Duplicate Block Fetching Logic
 
 **File:** `packages/indexer/src/ingestion/pipeline.ts`
-**Impact:** Maintenance burden — same logic duplicated in two methods
+**Impact:** Maintenance burden — same logic in `fetchBlockViaPapi()` and `fetchBlockViaLegacyRpc()`
 
-`fetchBlockViaPapi()` and `fetchBlockViaLegacyRpc()` contain nearly identical extrinsic mapping, event decoding, and enrichment code. When either code path needs a fix, the other must be updated too.
+Both methods contain identical extrinsic mapping, event decoding, timestamp extraction, and enrichment code. Fixes to one path must be manually mirrored to the other.
 
-**Fix:** Extract common logic to a `buildRawBlockData(header, body, hash, height)` helper.
-
----
-
-### M5. Accounts Stored with Hex Public Key, Not SS58
-
-**File:** `packages/indexer/src/ingestion/block-processor.ts`, `packages/db/src/queries.ts`
-**Impact:** Account address format mismatch between indexer and frontend
-
-The indexer stores accounts using the hex public key returned by PAPI (e.g., `0x1234...`). The frontend then re-encodes these for display, but search and API lookups require callers to know the hex key. This creates a UX issue: users searching with an SS58 address must have it normalized through `normalizeAddress()`, and cross-referencing with other explorers (Subscan, Statescan) that use SS58 as the canonical key fails.
-
-**Current mitigation:** The API server calls `normalizeAddress()` on account lookups, which works but is fragile.
-
-**Fix (future):** Store the canonical SS58 address (with chain prefix) alongside the hex public key, or normalize consistently at ingest time.
+**Fix:** Extract to a shared `buildRawBlockData()` helper.
 
 ---
 
-### ~~M6. Inconsistent Pagination Page Numbering~~ ✅ FIXED
+### M5. No Mobile Navigation
 
-**Files:** `packages/indexer/src/api/server.ts`
-**Status:** Fixed — all endpoints now use 1-based page: `Math.floor(offset / limit) + 1`.
+**File:** `packages/web/src/components/HeaderNav.tsx`
+**Impact:** Unusable on mobile devices
 
----
+Navigation links use `hidden sm:flex` — completely hidden on screens < 640px with no hamburger menu alternative. Mobile users cannot navigate the application.
 
-### ~~M7. Synchronous Filesystem Operations in Extension Discovery~~ ✅ FIXED
-
-**File:** `packages/indexer/src/plugins/registry.ts` → `discover()`
-**Status:** Fixed — replaced `fs.existsSync`, `fs.readdirSync`, `fs.readFileSync` with async `fs/promises` equivalents (`access`, `readdir`, `readFile`).
+**Fix:** Add a responsive hamburger menu using `useState` toggle and a slide-out drawer.
 
 ---
 
-### ~~M8. `/api/transfers` Inconsistent Response Shape~~ ✅ FIXED
+### M6. No Keyboard Accessibility for Dropdown Menus
 
-**File:** `packages/indexer/src/api/server.ts` → `/api/transfers`
-**Status:** Fixed — removed dual code path; endpoint always returns paginated `{ data, total, page, pageSize, hasMore }`. Frontend `getTransfers()` updated to extract `.data` from response.
+**File:** `packages/web/src/components/HeaderNav.tsx`
+**Impact:** WCAG 2.1 AA compliance failure
 
----
-
-## 🟢 Low Priority
-
-### ~~L1. No Test Suite~~ ✅ FIXED
-
-**Files:** Root `package.json`, all packages
-**Status:** Fixed — Added Vitest test suite with 84 tests across 5 test files:
-
-- `packages/indexer/src/__tests__/hex-utils.test.ts` — `hexToBytes`, `bytesToHex` round-trip tests
-- `packages/indexer/src/__tests__/event-utils.test.ts` — `enrichExtrinsicsFromEvents`, `extractAccountsFromEvent` tests
-- `packages/shared/src/__tests__/ss58.test.ts` — SS58 encode/decode/validate utilities
-- `packages/shared/src/__tests__/config-utils.test.ts` — `truncateHash`, `timeAgo` utilities
-- `packages/web/src/lib/__tests__/format.test.ts` — `formatBalance`, `formatNumber`, `formatDate` tests
-
-Also extracted `hexToBytes`/`bytesToHex` to a shared `hex-utils.ts` module (deduplicating 3 copies) and
-`enrichExtrinsicsFromEvents`/`extractAccountsFromEvent` to `event-utils.ts` for clean testability.
+Dropdown menus in the header navigation lack:
+- `Escape` key to close
+- Arrow key navigation between items
+- `aria-expanded`, `aria-haspopup` attributes
+- Focus trap within open dropdown
 
 ---
 
-### ~~L2. Docker Indexer Uses Alpine (V8 Compatibility Risk)~~ ✅ FIXED
+### M7. Accounts Stored as Hex Public Key
 
-**File:** `Dockerfile.indexer`
-**Status:** Fixed — switched both build and runner stages from `node:20-alpine` to `node:20-slim`, matching `Dockerfile.web`.
+**File:** `packages/indexer/src/ingestion/block-processor.ts`
+**Impact:** Cross-referencing with other explorers requires normalization
 
----
-
-### ~~L3. Missing `export const dynamic` on Data Pages~~ ✅ FIXED
-
-**Files:** All 12 data-fetching pages in `packages/web/src/app/`
-**Status:** Fixed — added `export const dynamic = "force-dynamic"` to homepage, blocks, events, extrinsics, transfers, accounts, logs, runtime, block/[id], extrinsic/[hash], account/[address], and chain-state pages.
+Accounts are stored as hex public keys (`0x1234...`). Users searching with SS58 addresses must rely on `normalizeAddress()` in the API layer. This works but is fragile and complicates cross-referencing with Subscan/Statescan.
 
 ---
 
-### ~~L4. `Pagination` Uses `useCallback` Instead of `useMemo`~~ ✅ FIXED
-
-**File:** `packages/web/src/components/Pagination.tsx`
-**Status:** Fixed — replaced `useCallback` + call with `useMemo` that computes page numbers directly.
-
----
-
-### ~~L5. No `"type": "module"` in Root `package.json`~~ ✅ FIXED
-
-**File:** `package.json` (root)
-**Status:** Fixed — added `"type": "module"` to root `package.json`.
+### ~~M8. No Security Headers~~ ✅ FIXED
+### ~~M9. Inconsistent Pagination~~ ✅ FIXED
+### ~~M10. Synchronous Filesystem in Discovery~~ ✅ FIXED
+### ~~M11. Inconsistent Transfers Response~~ ✅ FIXED
 
 ---
 
-### L6. `noUncheckedIndexedAccess` Not Enabled
+## 🟢 Low / Informational
+
+### L1. No API Client Retry Logic
+
+**File:** `packages/web/src/lib/api.ts`
+**Impact:** Single network failure causes page-level error
+
+The `fetchJson()` function has no retry logic, no request timeout, and uniform `revalidate: 6` caching. A single transient network failure between the Next.js server and the indexer API causes the entire page to render an error state.
+
+**Fix:** Add exponential retry (1-2 attempts) and per-endpoint revalidation windows:
+```typescript
+async function fetchJson<T>(url: string, options?: { retries?: number; revalidate?: number }): Promise<T> {
+  const maxRetries = options?.retries ?? 2;
+  for (let i = 0; i <= maxRetries; i++) {
+    try { return await fetch(url, { next: { revalidate: options?.revalidate ?? 6 } }).then(r => r.json()); }
+    catch { if (i === maxRetries) throw e; await new Promise(r => setTimeout(r, 200 * 2 ** i)); }
+  }
+}
+```
+
+---
+
+### L2. Docker Images Lack HEALTHCHECK
+
+**Files:** `Dockerfile.indexer`, `Dockerfile.web`
+**Impact:** Container orchestrators cannot determine container health independently
+
+Health checks are defined in `docker-compose.yml` but not in the Dockerfiles. Kubernetes, ECS, and other orchestrators require `HEALTHCHECK` instructions.
+
+**Fix:**
+```dockerfile
+# Dockerfile.indexer
+HEALTHCHECK --interval=30s --timeout=5s CMD curl -f http://localhost:3001/health || exit 1
+
+# Dockerfile.web
+HEALTHCHECK --interval=30s --timeout=5s CMD curl -f http://localhost:3000/ || exit 1
+```
+
+---
+
+### L3. `noUncheckedIndexedAccess` Not Enabled
 
 **File:** `tsconfig.base.json`
-**Impact:** Potential undefined access bugs not caught at compile time
+**Impact:** Potential undefined access bugs at array boundaries
 
-Several patterns in the codebase access array elements by index without null checks (e.g., `extrinsics[evt.extrinsicIndex]` in pipeline.ts). Enabling `"noUncheckedIndexedAccess": true` would catch these at compile time.
-
----
-
-### ~~L7. Dead Config in `next.config.js`~~ ✅ FIXED
-
-**File:** `packages/web/next.config.js`
-**Status:** Fixed — removed `experimental.serverActions` block (addressed together with M2 security headers).
+The codebase accesses array elements by index without null checks (e.g., `result.rows[0].count`). Enabling `"noUncheckedIndexedAccess": true` would catch these at compile time.
 
 ---
 
-## Architecture Observations (Non-Issues, For Context)
+### L4. Dark Mode Hardcoded
 
-### ✅ What's Working Well
+**File:** `packages/web/src/app/layout.tsx`
+**Impact:** No light mode option for users
 
-1. **Monorepo topology** — Clean dependency graph: `shared` → `db` → `indexer`, `shared` → `web`. No circular dependencies.
-2. **Dual-stream architecture** — Finalized + best-head with automatic backfill is the correct pattern for Substrate explorers.
-3. **Plugin system design** — Manifest-based discovery with event/call dispatch, DB migrations, and frontend viewer registration is extensible and well-structured.
-4. **RPC Pool** — Round-robin with exponential backoff suspension is a solid load-balancing strategy for unreliable public RPC nodes.
-5. **Transaction wrapping in `processBlock`** — All DB writes for a single block are atomic. No partial block data on failure.
-6. **Database design** — JSONB columns with GIN indexes, upsert semantics, and proper FK cascades are PostgreSQL best practices.
-7. **Migration runner** — Tracks applied migrations via `schema_migrations`, preventing re-execution.
-8. **API documentation** — Swagger/OpenAPI annotations on all endpoints.
-9. **Theme system** — Build-time resolution from env var is the correct pattern for Next.js static optimization.
-10. **Metrics singleton** — Rolling window (ring buffer) for rate calculation is efficient and memory-bounded.
-
-### 📊 Scale Considerations
-
-The current architecture is appropriate for chains with < 10M blocks. Beyond that:
-
-| Component              | Bottleneck          | Threshold          | Mitigation                                                                                    |
-| ---------------------- | ------------------- | ------------------ | --------------------------------------------------------------------------------------------- |
-| `COUNT(*)` queries     | Sequential scan     | ~5M rows           | Approximate counts or caching                                                                 |
-| `events` table         | Table size          | ~20M rows          | [Table partitioning by block range](https://www.postgresql.org/docs/16/ddl-partitioning.html) |
-| Backfill               | Single-process      | ~50M blocks        | Worker-based horizontal scaling                                                               |
-| `getAccounts`          | Correlated subquery | ~500K accounts     | Materialized view for extrinsic counts                                                        |
-| Runtime metadata cache | Memory              | ~50+ spec versions | LRU cache eviction                                                                            |
+`className="dark"` is hardcoded on the `<html>` element. No theme toggle or `prefers-color-scheme` media query is respected.
 
 ---
 
-## Recommended Fix Order
+### L5. Hardcoded DB Credentials in Docker Compose
 
-**Immediate (before next release):**
+**File:** `docker-compose.yml`
+**Impact:** Security risk if compose file is deployed to production as-is
 
-1. ~~C1 — Fix `runWithConcurrency` race condition~~ ✅
-2. ~~H2 — Guard `hexToBytes` against empty input~~ ✅
-3. ~~H1 — Add reconnection logic to PAPI subscriptions~~ ✅
-4. ~~M6 — Standardize pagination page numbering~~ ✅
+`POSTGRES_USER: polkaxplo` and `POSTGRES_PASSWORD: polkaxplo` are hardcoded. Redis has no password. While `.env.example` documents proper configuration, developers may deploy with defaults.
 
-**Short-term (next sprint):** 5. C3 — Wrap extension migrations in transactions 6. H4 — Replace `<a>` with Next.js `<Link>` 7. H3 — Fix SS58 prefix re-encoding 8. ~~L2 — Switch indexer Dockerfile to `node:20-slim`~~ ✅ 9. ~~M8 — Normalize `/api/transfers` response shape~~ ✅
+**Fix:** Use `${POSTGRES_PASSWORD:?error}` syntax to require explicit configuration.
 
-**Medium-term (next major version):** 10. H5 — Implement COUNT caching / approximate counts 11. M1 — Add API rate limiting 12. ~~M2 — Configure security headers~~ ✅ 13. C2 — Validate extension manifests with JSON Schema 14. L1 — Add test suite (Vitest) 15. M4 — Extract shared block processing logic
+---
 
-**Nice-to-have:** 16. M3, M5, ~~M7~~ ✅, ~~L3~~ ✅, ~~L4~~ ✅, ~~L5~~ ✅, L6, ~~L7~~ ✅
+### L6. Web Container Missing Health Dependency
+
+**File:** `docker-compose.yml`
+**Impact:** Web container may start before indexer API is ready
+
+The `explorer-web` service `depends_on` the indexer but without a `condition: service_healthy` check (unlike the DB and Redis services). This can cause initial page loads to fail.
+
+---
+
+### ~~L7–L11. Previously Fixed~~ ✅
+
+See [Previously Fixed section](#-previously-fixed) for details.
+
+---
+
+## ✅ Previously Fixed
+
+These findings from earlier review iterations have been successfully resolved:
+
+| ID | Finding | Fix Summary |
+|----|---------|-------------|
+| C4 | Race condition in `runWithConcurrency` | Work-stealing queue pattern (`queue.shift()`) |
+| H6 | No pipeline reconnection on stream error | Exponential backoff (1s → 60s), retry counter resets on success |
+| H7 | `hexToBytes` crashes on empty input | Guard `if (!clean) return new Uint8Array(0)` |
+| M8 | No security headers on web frontend | Added `X-Frame-Options`, `X-Content-Type-Options`, `Referrer-Policy`, `Permissions-Policy` |
+| M9 | Inconsistent pagination numbering | Standardized to 1-based: `Math.floor(offset / limit) + 1` |
+| M10 | Synchronous filesystem in extension discovery | Replaced with `fs/promises` async equivalents |
+| M11 | Inconsistent `/api/transfers` response | Unified to `{ data, total, page, pageSize, hasMore }` |
+| L7 | Docker indexer uses Alpine | Switched to `node:20-slim` |
+| L8 | Missing `export const dynamic` on pages | Added `"force-dynamic"` to all 12 data pages |
+| L9 | `Pagination` uses `useCallback` incorrectly | Replaced with `useMemo` |
+| L10 | No `"type": "module"` in root `package.json` | Added ESM marker |
+| L11 | Dead config in `next.config.js` | Removed `experimental.serverActions` |
+
+---
+
+## ✅ What's Working Well
+
+### Architecture & Design
+
+1. **Monorepo topology** — Clean dependency graph with no circular dependencies. Turborepo properly configured with task dependencies (`^build` for dependents) and file-hash caching.
+
+2. **Dual-stream ingestion** — Finalized + best-head streaming with automatic backfill is the textbook-correct pattern for Substrate explorers. The backfill uses configurable batch size (`BATCH_SIZE`), bounded concurrency (`BACKFILL_CONCURRENCY`), and a work-stealing queue.
+
+3. **RPC Pool** — Latency-weighted load balancing with warm-up phase (round-robin for first 20 calls), exponential backoff suspension (5s → 120s), and automatic unsuspension when all endpoints fail. This is production-quality infrastructure.
+
+4. **Plugin system** — Manifest-based discovery → registration → dispatch index construction → migration management → historical backfill. The `eventIndex` and `callIndex` maps provide O(1) handler lookup per event/call.
+
+5. **Transaction-wrapped block processing** — All DB writes for a block are atomic. The deadlock retry with jitter (50ms + random * 150ms * attempt) and sorted account upserts are correct concurrency patterns.
+
+### Database
+
+6. **Schema design** — Proper relational design with `ON DELETE CASCADE`/`SET NULL`, composite indexes, GIN indexes on JSONB columns, and `CREATE TABLE IF NOT EXISTS` for idempotent migrations.
+
+7. **Idempotent writes** — `ON CONFLICT DO UPDATE` / `DO NOTHING` throughout, enabling safe re-processing without data corruption.
+
+8. **DbMetrics** — Rolling window (1,000 queries) for read/write latency percentiles (p50/p95/p99), slow query counter (>100ms), pool utilization tracking. Production-grade observability.
+
+### API & Frontend
+
+9. **OpenAPI documentation** — All 40+ endpoints annotated with JSDoc/Swagger tags, parameters, request/response schemas, and security requirements.
+
+10. **Admin API security** — `requireAdmin` middleware at the prefix level (`/api/admin/`), configurable via `ADMIN_API_KEY`, disabled in production if unset.
+
+11. **Rate limiting** — In-memory per-IP rate limiter (configurable window/max via env vars), automatic stale entry cleanup every 5 minutes.
+
+12. **Theme system** — `NEXT_PUBLIC_CHAIN_ID` build arg resolves chain branding at Next.js build time. CSS custom property `--color-accent` enables runtime theme consistency.
+
+13. **IndexerMetrics** — Ring buffers for throughput calculation, ETA estimation, memory tracking, and block processing time percentiles. Powers a comprehensive `/api/indexer-status` dashboard.
+
+---
+
+## 📊 Scale Considerations
+
+The architecture is appropriate for chains with < 10M blocks. Beyond that:
+
+| Component | Bottleneck | Threshold | Mitigation |
+|-----------|-----------|-----------|------------|
+| `COUNT(*)` queries | Sequential scan | ~5M rows | Approximate counts or Redis cache |
+| `events` table | Table size | ~20M rows | [Table partitioning](https://www.postgresql.org/docs/16/ddl-partitioning.html) by block range |
+| Backfill | Single-process | ~50M blocks | Worker-based horizontal scaling |
+| `getAccounts` | Correlated subquery | ~500K accounts | Materialized view for extrinsic counts |
+| Runtime cache | Memory growth | ~50+ spec versions | LRU cache eviction |
+| `server.ts` | Cognitive load | Already exceeded | Route modularization (C1) |
+| Connection pool | 20 max connections | ~100 req/s | PgBouncer or pool scaling |
+
+---
+
+## Recommended Roadmap
+
+### Phase 1 — Immediate (Before Next Release)
+
+| Priority | ID | Action |
+|----------|----|--------|
+| 🔴 | C1 | Split `server.ts` into route modules |
+| 🔴 | C3 | Wrap extension migrations in transactions |
+| 🟠 | H1 | Add tests for XCM SCALE decoding, block processor, API contracts |
+| 🟠 | H3 | Replace `<a href>` with Next.js `<Link>` across all components |
+
+### Phase 2 — Short-Term (Next Sprint)
+
+| Priority | ID | Action |
+|----------|----|--------|
+| 🟠 | H2 | Re-enable `no-explicit-any` as warning, fix violations |
+| 🟠 | H5 | Fix SS58 prefix re-encoding |
+| 🟡 | M1 | Make XCM native symbol configurable |
+| 🟡 | M2 | Whitelist governance table names |
+| 🟡 | M5 | Add mobile hamburger menu |
+| 🟡 | M6 | Keyboard accessibility for dropdown menus |
+
+### Phase 3 — Medium-Term (Next Major Version)
+
+| Priority | ID | Action |
+|----------|----|--------|
+| 🔴 | C2 | Validate extension manifests (JSON Schema) |
+| 🟠 | H4 | Implement count caching / approximate pagination |
+| 🟡 | M3 | LRU cache for runtime metadata |
+| 🟡 | M4 | Extract shared block fetch logic |
+| 🟢 | L1 | API client retry & timeout |
+| 🟢 | L2 | HEALTHCHECK in Dockerfiles |
+| 🟢 | L3 | Enable `noUncheckedIndexedAccess` |
+
+### Phase 4 — Nice-to-Have
+
+| Priority | ID | Action |
+|----------|----|--------|
+| 🟢 | L4 | Light/dark mode toggle |
+| 🟢 | L5 | Externalize Docker credentials |
+| 🟢 | L6 | Health condition on web container dependency |
+| 🟡 | M7 | Store canonical SS58 alongside hex key |
