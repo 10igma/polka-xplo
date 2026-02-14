@@ -1,17 +1,18 @@
 import { getDemocracyProposals, type GovernanceProposal } from "@/lib/api";
+import { Pagination } from "@/components/Pagination";
 import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 
 const STATUS_COLORS: Record<string, string> = {
   proposed: "badge-info",
-  tabled: "bg-purple-900/40 text-purple-300 border border-purple-800/40",
+  tabled: "badge-purple",
 };
 
 function StatusBadge({ status }: { status: string }) {
   const cls = STATUS_COLORS[status.toLowerCase()] ?? "badge-info";
   return (
-    <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${cls}`}>
+    <span className={cls}>
       {status}
     </span>
   );
@@ -75,7 +76,7 @@ export default async function ProposalsPage({
       )}
 
       <div className="card overflow-x-auto">
-        <table className="min-w-full text-sm">
+        <table className="w-full text-sm">
           <thead>
             <tr className="text-left text-zinc-500 border-b border-zinc-800">
               <th className="pb-2 pr-4">#</th>
@@ -87,15 +88,15 @@ export default async function ProposalsPage({
           </thead>
           <tbody>
             {proposals.map((p) => (
-              <tr key={p.proposal_index} className="border-b border-zinc-800/50 hover:bg-zinc-800/30">
-                <td className="py-2 pr-4 font-mono text-zinc-100">{p.proposal_index}</td>
-                <td className="py-2 pr-4">
+              <tr key={p.proposal_index} className="table-row">
+                <td className="py-2.5 pr-4 font-mono text-zinc-100">{p.proposal_index}</td>
+                <td className="py-2.5 pr-4">
                   <StatusBadge status={p.status} />
                 </td>
-                <td className="py-2 pr-4 text-zinc-300 font-mono text-xs">
+                <td className="py-2.5 pr-4 text-zinc-300 font-mono text-xs">
                   {BigInt(p.deposit).toLocaleString()}
                 </td>
-                <td className="py-2 pr-4">
+                <td className="py-2.5 pr-4">
                   {p.referendum_index !== null ? (
                     <Link
                       href={`/governance/referenda/${p.referendum_index}`}
@@ -107,7 +108,7 @@ export default async function ProposalsPage({
                     <span className="text-zinc-500">—</span>
                   )}
                 </td>
-                <td className="py-2 text-right text-zinc-400 font-mono text-xs">
+                <td className="py-2.5 text-right text-zinc-400 font-mono text-xs">
                   {p.block_height.toLocaleString()}
                 </td>
               </tr>
@@ -124,29 +125,12 @@ export default async function ProposalsPage({
       </div>
 
       {/* Pagination */}
-      {totalPages > 1 && (
-        <div className="flex justify-center gap-2">
-          {page > 1 && (
-            <Link
-              href={`/governance/proposals?page=${page - 1}${status ? `&status=${status}` : ""}`}
-              className="px-3 py-1 rounded bg-zinc-800 text-zinc-300 hover:bg-zinc-700 text-sm"
-            >
-              ← Prev
-            </Link>
-          )}
-          <span className="px-3 py-1 text-sm text-zinc-400">
-            Page {page} of {totalPages}
-          </span>
-          {page < totalPages && (
-            <Link
-              href={`/governance/proposals?page=${page + 1}${status ? `&status=${status}` : ""}`}
-              className="px-3 py-1 rounded bg-zinc-800 text-zinc-300 hover:bg-zinc-700 text-sm"
-            >
-              Next →
-            </Link>
-          )}
-        </div>
-      )}
+      <Pagination
+        currentPage={page}
+        totalPages={totalPages}
+        basePath="/governance/proposals"
+        extraParams={status ? { status } : undefined}
+      />
     </div>
   );
 }

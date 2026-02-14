@@ -1,4 +1,5 @@
 import { getXcmTransfers, type XcmTransfer } from "@/lib/api";
+import { Pagination } from "@/components/Pagination";
 import { truncateHash } from "@/lib/format";
 import Link from "next/link";
 
@@ -113,7 +114,7 @@ export default async function XcmTransfersPage({
 
       {transfers.length > 0 && (
         <div className="card overflow-x-auto">
-          <table className="min-w-full text-sm">
+          <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-zinc-500 border-b border-zinc-800">
                 <th className="pb-2 pr-4">Message</th>
@@ -125,16 +126,16 @@ export default async function XcmTransfersPage({
                 <th className="pb-2">Protocol</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-zinc-800/50">
+            <tbody>
               {transfers.map((t) => (
-                <tr key={t.id} className="hover:bg-zinc-800/30">
-                  <td className="py-2 pr-4 font-mono text-xs text-accent">
+                <tr key={t.id} className="table-row">
+                  <td className="py-2.5 pr-4 font-mono text-xs text-accent">
                     {t.message_hash ? truncateHash(t.message_hash) : "—"}
                   </td>
-                  <td className="py-2 pr-4">
+                  <td className="py-2.5 pr-4">
                     <DirectionBadge direction={t.direction} />
                   </td>
-                  <td className="py-2 pr-4 text-zinc-300 text-xs">
+                  <td className="py-2.5 pr-4 text-zinc-300 text-xs">
                     <div>
                       {t.from_chain_id != null && (
                         <span className="text-zinc-500 text-[10px] block">{paraName(t.from_chain_id)}</span>
@@ -148,7 +149,7 @@ export default async function XcmTransfersPage({
                       )}
                     </div>
                   </td>
-                  <td className="py-2 pr-4 text-zinc-300 text-xs">
+                  <td className="py-2.5 pr-4 text-zinc-300 text-xs">
                     <div>
                       {t.to_chain_id != null && (
                         <span className="text-zinc-500 text-[10px] block">{paraName(t.to_chain_id)}</span>
@@ -162,15 +163,15 @@ export default async function XcmTransfersPage({
                       )}
                     </div>
                   </td>
-                  <td className="py-2 pr-4 text-right font-mono text-xs text-zinc-200">
+                  <td className="py-2.5 pr-4 text-right font-mono text-xs text-zinc-200">
                     {formatAmount(t.amount, t.asset_symbol)}
                   </td>
-                  <td className="py-2 pr-4">
+                  <td className="py-2.5 pr-4">
                     <Link href={`/block/${t.block_height}`} className="text-accent hover:underline font-mono text-xs">
                       #{t.block_height.toLocaleString()}
                     </Link>
                   </td>
-                  <td className="py-2">
+                  <td className="py-2.5">
                     <span className="text-xs text-zinc-500">{t.protocol ?? "—"}</span>
                   </td>
                 </tr>
@@ -180,30 +181,22 @@ export default async function XcmTransfersPage({
         </div>
       )}
 
-      {/* Pagination */}
-      {totalPages > 1 && (
-        <div className="flex justify-center gap-2">
-          {page > 1 && (
-            <Link
-              href={`/xcm/transfers?page=${page - 1}${direction ? `&direction=${direction}` : ""}${asset ? `&asset=${asset}` : ""}`}
-              className="px-3 py-1 rounded bg-zinc-800 text-zinc-300 text-sm hover:bg-zinc-700"
-            >
-              ← Prev
-            </Link>
-          )}
-          <span className="px-3 py-1 text-sm text-zinc-500">
-            Page {page} of {totalPages}
-          </span>
-          {page < totalPages && (
-            <Link
-              href={`/xcm/transfers?page=${page + 1}${direction ? `&direction=${direction}` : ""}${asset ? `&asset=${asset}` : ""}`}
-              className="px-3 py-1 rounded bg-zinc-800 text-zinc-300 text-sm hover:bg-zinc-700"
-            >
-              Next →
-            </Link>
-          )}
+      {transfers.length === 0 && !error && (
+        <div className="text-center py-12 text-zinc-500">
+          No cross-chain transfers found. The ext-xcm extension may still be syncing.
         </div>
       )}
+
+      {/* Pagination */}
+      <Pagination
+        currentPage={page}
+        totalPages={totalPages}
+        basePath="/xcm/transfers"
+        extraParams={{
+          ...(direction ? { direction } : {}),
+          ...(asset ? { asset } : {}),
+        }}
+      />
     </div>
   );
 }
@@ -221,10 +214,10 @@ function FilterLink({ label, href, active }: { label: string; href: string; acti
   return (
     <Link
       href={href}
-      className={`text-xs px-2 py-1 rounded transition-colors ${
+      className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors ${
         active
-          ? "bg-accent/20 text-accent border border-accent/30"
-          : "text-zinc-400 hover:text-zinc-200 border border-zinc-800 hover:border-zinc-600"
+          ? "bg-accent/20 text-accent border border-accent/40"
+          : "bg-zinc-800/40 text-zinc-400 hover:text-zinc-100 border border-zinc-700/40"
       }`}
     >
       {label}

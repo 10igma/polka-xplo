@@ -25,8 +25,11 @@ export default async function ExtrinsicPage({ params }: { params: Promise<{ hash
     data = await getExtrinsic(hash);
   } catch {
     return (
-      <div className="text-center py-20 text-zinc-500">
-        Extrinsic not found or indexer unavailable.
+      <div className="space-y-6">
+        <Link href="/extrinsics" className="text-xs text-accent hover:underline">← Extrinsics</Link>
+        <div className="text-center py-20 text-zinc-500">
+          Extrinsic not found or indexer unavailable.
+        </div>
       </div>
     );
   }

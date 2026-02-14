@@ -20,8 +20,11 @@ export default async function AccountPage({ params }: { params: Promise<{ addres
     data = await getAccount(address);
   } catch {
     return (
-      <div className="text-center py-20 text-zinc-500">
-        Account not found or indexer unavailable.
+      <div className="space-y-6">
+        <Link href="/accounts" className="text-xs text-accent hover:underline">← Accounts</Link>
+        <div className="text-center py-20 text-zinc-500">
+          Account not found or indexer unavailable.
+        </div>
       </div>
     );
   }

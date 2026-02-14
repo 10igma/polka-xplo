@@ -1,4 +1,5 @@
 import { getAssets, type Asset } from "@/lib/api";
+import { Pagination } from "@/components/Pagination";
 import { formatBalance, truncateHash } from "@/lib/format";
 import Link from "next/link";
 
@@ -48,7 +49,7 @@ export default async function AssetsPage({
 
       {assets.length > 0 && (
         <div className="card overflow-x-auto">
-          <table className="min-w-full text-sm">
+          <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-zinc-500 border-b border-zinc-800">
                 <th className="pb-2 pr-4">ID</th>
@@ -64,9 +65,9 @@ export default async function AssetsPage({
               {assets.map((a) => (
                 <tr
                   key={a.asset_id}
-                  className="border-b border-zinc-800/50 hover:bg-zinc-800/30"
+                  className="table-row"
                 >
-                  <td className="py-2 pr-4">
+                  <td className="py-2.5 pr-4">
                     <Link
                       href={`/assets/${a.asset_id}`}
                       className="text-accent hover:underline font-mono"
@@ -74,10 +75,10 @@ export default async function AssetsPage({
                       {a.asset_id}
                     </Link>
                   </td>
-                  <td className="py-2 pr-4 text-zinc-200">{a.name ?? "—"}</td>
-                  <td className="py-2 pr-4 text-zinc-300 font-mono">{a.symbol ?? "—"}</td>
-                  <td className="py-2 pr-4 text-zinc-400">{a.decimals}</td>
-                  <td className="py-2 pr-4">
+                  <td className="py-2.5 pr-4 text-zinc-200">{a.name ?? "—"}</td>
+                  <td className="py-2.5 pr-4 text-zinc-300 font-mono">{a.symbol ?? "—"}</td>
+                  <td className="py-2.5 pr-4 text-zinc-400">{a.decimals}</td>
+                  <td className="py-2.5 pr-4">
                     {a.owner ? (
                       <Link
                         href={`/account/${a.owner}`}
@@ -89,10 +90,10 @@ export default async function AssetsPage({
                       "—"
                     )}
                   </td>
-                  <td className="py-2 pr-4 text-right text-zinc-200 font-mono">
+                  <td className="py-2.5 pr-4 text-right text-zinc-200 font-mono">
                     {formatBalance(a.supply, a.decimals, a.symbol ?? "")}
                   </td>
-                  <td className="py-2 text-right">
+                  <td className="py-2.5 text-right">
                     <StatusBadge status={a.status} />
                   </td>
                 </tr>
@@ -109,29 +110,12 @@ export default async function AssetsPage({
       )}
 
       {/* Pagination */}
-      {totalPages > 1 && (
-        <div className="flex justify-center gap-2">
-          {page > 1 && (
-            <Link
-              href={`/assets?page=${page - 1}${status ? `&status=${status}` : ""}`}
-              className="px-3 py-1 rounded-lg bg-zinc-800/60 text-zinc-300 hover:bg-zinc-700/60 text-sm"
-            >
-              ← Prev
-            </Link>
-          )}
-          <span className="px-3 py-1 text-sm text-zinc-500">
-            Page {page} of {totalPages}
-          </span>
-          {page < totalPages && (
-            <Link
-              href={`/assets?page=${page + 1}${status ? `&status=${status}` : ""}`}
-              className="px-3 py-1 rounded-lg bg-zinc-800/60 text-zinc-300 hover:bg-zinc-700/60 text-sm"
-            >
-              Next →
-            </Link>
-          )}
-        </div>
-      )}
+      <Pagination
+        currentPage={page}
+        totalPages={totalPages}
+        basePath="/assets"
+        extraParams={status ? { status } : undefined}
+      />
     </div>
   );
 }
@@ -141,10 +125,10 @@ function StatusBadge({ status }: { status: string }) {
     status === "active"
       ? "badge-success"
       : status === "destroyed"
-        ? "bg-red-900/40 text-red-300 border border-red-800/40"
+        ? "badge-error"
         : "badge-info";
   return (
-    <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${cls}`}>
+    <span className={cls}>
       {status}
     </span>
   );

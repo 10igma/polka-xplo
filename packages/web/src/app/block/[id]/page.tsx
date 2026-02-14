@@ -21,7 +21,10 @@ export default async function BlockPage({ params }: { params: Promise<{ id: stri
     data = await getBlock(id);
   } catch {
     return (
-      <div className="text-center py-20 text-zinc-500">Block not found or indexer unavailable.</div>
+      <div className="space-y-6">
+        <Link href="/blocks" className="text-xs text-accent hover:underline">← Blocks</Link>
+        <div className="text-center py-20 text-zinc-500">Block not found or indexer unavailable.</div>
+      </div>
     );
   }
 

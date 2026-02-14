@@ -47,6 +47,18 @@
     @apply badge bg-blue-950 text-blue-400 border border-blue-800/50;
   }
 
+  .badge-warning {
+    @apply badge bg-yellow-950 text-yellow-400 border border-yellow-800/50;
+  }
+
+  .badge-neutral {
+    @apply badge bg-zinc-800/40 text-zinc-400 border border-zinc-700/40;
+  }
+
+  .badge-purple {
+    @apply badge bg-purple-950 text-purple-400 border border-purple-800/50;
+  }
+
   .table-row {
     @apply border-b border-zinc-800/50 hover:bg-zinc-800/30 transition-colors;
   }

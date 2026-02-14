@@ -24,8 +24,11 @@ export default async function TechCommProposalDetailPage({
 
   if (error || !proposal) {
     return (
-      <div className="text-center py-20 text-zinc-500">
-        {error ?? "Proposal not found."}
+      <div className="space-y-6">
+        <Link href="/governance/techcomm" className="text-xs text-accent hover:underline">← Technical Committee</Link>
+        <div className="text-center py-20 text-zinc-500">
+          {error ?? "Proposal not found."}
+        </div>
       </div>
     );
   }
@@ -102,7 +105,7 @@ export default async function TechCommProposalDetailPage({
 
         {votes.length > 0 ? (
           <div className="overflow-x-auto">
-            <table className="min-w-full text-sm">
+            <table className="w-full text-sm">
               <thead>
                 <tr className="text-left text-zinc-500 border-b border-zinc-800">
                   <th className="pb-2 pr-4">Voter</th>
@@ -114,9 +117,9 @@ export default async function TechCommProposalDetailPage({
                 {votes.map((v) => (
                   <tr
                     key={`${v.voter}-${v.block_height}`}
-                    className="border-b border-zinc-800/50 hover:bg-zinc-800/30"
+                    className="table-row"
                   >
-                    <td className="py-2 pr-4">
+                    <td className="py-2.5 pr-4">
                       <Link
                         href={`/account/${v.voter}`}
                         className="text-accent hover:underline font-mono text-xs"
@@ -124,18 +127,12 @@ export default async function TechCommProposalDetailPage({
                         {truncateHash(v.voter, 8)}
                       </Link>
                     </td>
-                    <td className="py-2 pr-4">
-                      <span
-                        className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${
-                          v.is_aye
-                            ? "bg-green-900/40 text-green-300 border border-green-800/40"
-                            : "bg-red-900/40 text-red-300 border border-red-800/40"
-                        }`}
-                      >
+                    <td className="py-2.5 pr-4">
+                      <span className={v.is_aye ? "badge-success" : "badge-error"}>
                         {v.is_aye ? "Aye" : "Nay"}
                       </span>
                     </td>
-                    <td className="py-2 text-right text-zinc-400 font-mono text-xs">
+                    <td className="py-2.5 text-right text-zinc-400 font-mono text-xs">
                       {v.block_height.toLocaleString()}
                     </td>
                   </tr>

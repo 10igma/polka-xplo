@@ -1,4 +1,5 @@
 import { getReferenda, type GovernanceReferendum } from "@/lib/api";
+import { Pagination } from "@/components/Pagination";
 import Link from "next/link";
 
 export const dynamic = "force-dynamic";
@@ -6,13 +7,13 @@ export const dynamic = "force-dynamic";
 const STATUS_COLORS: Record<string, string> = {
   started: "badge-info",
   passed: "badge-success",
-  notpassed: "bg-red-900/40 text-red-300 border border-red-800/40",
-  cancelled: "bg-zinc-800/40 text-zinc-400 border border-zinc-700/40",
+  notpassed: "badge-error",
+  cancelled: "badge-neutral",
 };
 
 function StatusBadge({ status }: { status: string }) {
   const cls = STATUS_COLORS[status.toLowerCase()] ?? "badge-info";
-  return <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${cls}`}>{status}</span>;
+  return <span className={cls}>{status}</span>;
 }
 
 export default async function ReferendaPage({
@@ -73,7 +74,7 @@ export default async function ReferendaPage({
       )}
 
       <div className="card overflow-x-auto">
-        <table className="min-w-full text-sm">
+        <table className="w-full text-sm">
           <thead>
             <tr className="text-left text-zinc-500 border-b border-zinc-800">
               <th className="pb-2 pr-4">#</th>
@@ -87,22 +88,22 @@ export default async function ReferendaPage({
           </thead>
           <tbody>
             {referenda.map((r) => (
-              <tr key={r.ref_index} className="border-b border-zinc-800/50 hover:bg-zinc-800/30">
-                <td className="py-2 pr-4">
+              <tr key={r.ref_index} className="table-row">
+                <td className="py-2.5 pr-4">
                   <Link href={`/governance/referenda/${r.ref_index}`} className="text-accent hover:underline font-mono">
                     {r.ref_index}
                   </Link>
                 </td>
-                <td className="py-2 pr-4">
+                <td className="py-2.5 pr-4">
                   <StatusBadge status={r.status} />
                 </td>
-                <td className="py-2 pr-4 text-zinc-300">{r.threshold ?? "—"}</td>
-                <td className="py-2 pr-4 text-zinc-300 font-mono">
+                <td className="py-2.5 pr-4 text-zinc-300">{r.threshold ?? "—"}</td>
+                <td className="py-2.5 pr-4 text-zinc-300 font-mono">
                   {r.end_block ? r.end_block.toLocaleString() : "—"}
                 </td>
-                <td className="py-2 pr-4 text-right text-green-400">{r.aye_count}</td>
-                <td className="py-2 pr-4 text-right text-red-400">{r.nay_count}</td>
-                <td className="py-2 text-right text-zinc-300">{r.vote_count}</td>
+                <td className="py-2.5 pr-4 text-right text-green-400">{r.aye_count}</td>
+                <td className="py-2.5 pr-4 text-right text-red-400">{r.nay_count}</td>
+                <td className="py-2.5 text-right text-zinc-300">{r.vote_count}</td>
               </tr>
             ))}
             {referenda.length === 0 && (
@@ -117,29 +118,12 @@ export default async function ReferendaPage({
       </div>
 
       {/* Pagination */}
-      {totalPages > 1 && (
-        <div className="flex justify-center gap-2">
-          {page > 1 && (
-            <Link
-              href={`/governance/referenda?page=${page - 1}${status ? `&status=${status}` : ""}`}
-              className="px-3 py-1 rounded bg-zinc-800 text-zinc-300 hover:bg-zinc-700 text-sm"
-            >
-              ← Prev
-            </Link>
-          )}
-          <span className="px-3 py-1 text-sm text-zinc-400">
-            Page {page} of {totalPages}
-          </span>
-          {page < totalPages && (
-            <Link
-              href={`/governance/referenda?page=${page + 1}${status ? `&status=${status}` : ""}`}
-              className="px-3 py-1 rounded bg-zinc-800 text-zinc-300 hover:bg-zinc-700 text-sm"
-            >
-              Next →
-            </Link>
-          )}
-        </div>
-      )}
+      <Pagination
+        currentPage={page}
+        totalPages={totalPages}
+        basePath="/governance/referenda"
+        extraParams={status ? { status } : undefined}
+      />
     </div>
   );
 }

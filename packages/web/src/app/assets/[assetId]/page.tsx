@@ -14,7 +14,10 @@ export default async function AssetDetailPage({
 
   if (Number.isNaN(assetId)) {
     return (
-      <div className="text-center py-20 text-zinc-500">Invalid asset ID.</div>
+      <div className="space-y-6">
+        <Link href="/assets" className="text-xs text-accent hover:underline">← Assets</Link>
+        <div className="text-center py-20 text-zinc-500">Invalid asset ID.</div>
+      </div>
     );
   }
 
@@ -94,7 +97,7 @@ export default async function AssetDetailPage({
         </h2>
         {transfers.length > 0 ? (
           <div className="overflow-x-auto">
-            <table className="min-w-full text-sm">
+            <table className="w-full text-sm">
               <thead>
                 <tr className="text-left text-zinc-500 border-b border-zinc-800">
                   <th className="pb-2 pr-4">Block</th>
@@ -107,9 +110,9 @@ export default async function AssetDetailPage({
                 {transfers.map((t) => (
                   <tr
                     key={t.id}
-                    className="border-b border-zinc-800/50 hover:bg-zinc-800/30"
+                    className="table-row"
                   >
-                    <td className="py-2 pr-4">
+                    <td className="py-2.5 pr-4">
                       <Link
                         href={`/block/${t.block_height}`}
                         className="text-accent hover:underline font-mono text-xs"
@@ -117,7 +120,7 @@ export default async function AssetDetailPage({
                         {formatNumber(t.block_height)}
                       </Link>
                     </td>
-                    <td className="py-2 pr-4">
+                    <td className="py-2.5 pr-4">
                       <Link
                         href={`/account/${t.from_address}`}
                         className="text-accent hover:underline font-mono text-xs"
@@ -125,7 +128,7 @@ export default async function AssetDetailPage({
                         {truncateHash(t.from_address)}
                       </Link>
                     </td>
-                    <td className="py-2 pr-4">
+                    <td className="py-2.5 pr-4">
                       <Link
                         href={`/account/${t.to_address}`}
                         className="text-accent hover:underline font-mono text-xs"
@@ -133,7 +136,7 @@ export default async function AssetDetailPage({
                         {truncateHash(t.to_address)}
                       </Link>
                     </td>
-                    <td className="py-2 text-right text-zinc-200 font-mono">
+                    <td className="py-2.5 text-right text-zinc-200 font-mono">
                       {formatBalance(t.amount, decimals, symbol)}
                     </td>
                   </tr>
@@ -195,10 +198,10 @@ function StatusBadge({ status }: { status: string }) {
     status === "active"
       ? "badge-success"
       : status === "destroyed"
-        ? "bg-red-900/40 text-red-300 border border-red-800/40"
+        ? "badge-error"
         : "badge-info";
   return (
-    <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${cls}`}>
+    <span className={cls}>
       {status}
     </span>
   );
