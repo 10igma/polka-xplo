@@ -1,4 +1,5 @@
 import type { BlockContext, ExplorerEvent } from "@polka-xplo/shared";
+import { DEFAULT_CONFIG, getChainConfig } from "@polka-xplo/shared";
 import { query } from "@polka-xplo/db";
 import fs from "node:fs";
 import path from "node:path";
@@ -180,7 +181,7 @@ async function handleXTokensTransferred(ctx: BlockContext, event: ExplorerEvent)
       [event.extrinsicId, ctx.blockHeight],
     );
     if (hashResult.rows.length > 0) {
-      messageHash = String(hashResult.rows[0].hash ?? "");
+      messageHash = String(hashResult.rows[0]!.hash ?? "");
     }
   }
 
@@ -280,19 +281,16 @@ async function extractXTokensTransfer(
 }
 
 /**
- * Resolve the native token symbol from chain config or well-known defaults.
+ * Resolve the native token symbol from chain config.
+ * Uses the CHAIN_ID environment variable to look up the correct chain configuration.
  */
+let _cachedSymbol: string | null = null;
 async function resolveNativeSymbol(): Promise<string> {
-  // The native token is not in the assets table (that tracks foreign assets).
-  // Read from chain-config.json if available, otherwise use fallback.
-  try {
-    const configPath = path.resolve(__dirname, "..", "..", "..", "chain-config.json");
-    const config = JSON.parse(fs.readFileSync(configPath, "utf-8"));
-    if (config.token) return String(config.token);
-  } catch {
-    // chain-config.json may not exist in this context
-  }
-  return "AJUN";
+  if (_cachedSymbol) return _cachedSymbol;
+  const chainId = process.env.CHAIN_ID ?? DEFAULT_CONFIG.defaultChain;
+  const chainConfig = getChainConfig(DEFAULT_CONFIG, chainId);
+  _cachedSymbol = chainConfig?.tokenSymbol ?? "DOT";
+  return _cachedSymbol;
 }
 
 /**
@@ -935,8 +933,8 @@ async function resolveAssetSymbol(assetId: string): Promise<string> {
       `SELECT symbol FROM assets WHERE asset_id = $1`,
       [Number(assetId)],
     );
-    if (result.rows.length > 0 && result.rows[0].symbol) {
-      return String(result.rows[0].symbol);
+    if (result.rows.length > 0 && result.rows[0]!.symbol) {
+      return String(result.rows[0]!.symbol);
     }
   } catch {
     // assets table may not exist if ext-assets isn't loaded
@@ -1013,3 +1011,18 @@ async function upsertChannel(
     [fromPara, toPara, blockHeight],
   );
 }
+
+// ============================================================
+// Exported for testing — pure parsing / decoding utilities
+// ============================================================
+export {
+  decodeCompactU32,
+  scaleCompactLen,
+  networkFieldLen,
+  splitHexJunctions,
+  resolveJunctions,
+  extractAccountFromMultilocation,
+  extractParaIdFromMultilocation,
+  parseJunctionAccount,
+  parseJunctionParaId,
+};

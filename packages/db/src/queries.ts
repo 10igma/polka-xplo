@@ -9,6 +9,83 @@ import type {
 import { query, transaction, type DbClient } from "./client.js";
 
 // ============================================================
+// Caching — avoids expensive full-table scans on every page request
+// ============================================================
+
+interface CacheEntry<T = number> {
+  value: T;
+  expiresAt: number;
+}
+
+/** Default TTL for count caches (30 seconds) */
+const COUNT_CACHE_TTL_MS = 30_000;
+
+/** Longer TTL for expensive aggregate queries like SUM over JSONB (2 minutes) */
+const SLOW_CACHE_TTL_MS = 120_000;
+
+/** Cache for generic query results (counts, module lists, etc.) */
+const queryCache = new Map<string, CacheEntry<unknown>>();
+
+/**
+ * Execute a COUNT query with TTL-based caching.
+ * The `cacheKey` must uniquely identify the query+params combination.
+ */
+async function cachedCount(
+  cacheKey: string,
+  sql: string,
+  params: unknown[] = [],
+  ttl = COUNT_CACHE_TTL_MS,
+): Promise<number> {
+  const now = Date.now();
+  const cached = queryCache.get(cacheKey) as CacheEntry<number> | undefined;
+  if (cached && cached.expiresAt > now) return cached.value;
+
+  const result = await query<{ count: string }>(sql, params);
+  const value = parseInt(result.rows[0]?.count ?? "0", 10);
+  queryCache.set(cacheKey, { value, expiresAt: now + ttl });
+  return value;
+}
+
+/**
+ * Get an estimated row count for a table using PostgreSQL statistics.
+ * Returns instantly (~0ms) from pg_class.reltuples which is maintained
+ * by autovacuum/ANALYZE. Accurate within a few percent for large tables.
+ * Falls back to 0 for empty/unanalyzed tables.
+ */
+async function estimatedRowCount(tableName: string): Promise<number> {
+  const now = Date.now();
+  const key = `estimated:${tableName}`;
+  const cached = queryCache.get(key) as CacheEntry<number> | undefined;
+  if (cached && cached.expiresAt > now) return cached.value;
+
+  const result = await query<{ estimate: string }>(
+    `SELECT COALESCE(reltuples, 0)::bigint AS estimate FROM pg_class WHERE relname = $1`,
+    [tableName],
+  );
+  const value = parseInt(result.rows[0]?.estimate ?? "0", 10);
+  queryCache.set(key, { value, expiresAt: now + COUNT_CACHE_TTL_MS });
+  return Math.max(value, 0);
+}
+
+/**
+ * Cache an arbitrary query result with TTL.
+ * Used for expensive queries like DISTINCT module/event lists.
+ */
+async function cachedQuery<T>(
+  cacheKey: string,
+  fn: () => Promise<T>,
+  ttl = SLOW_CACHE_TTL_MS,
+): Promise<T> {
+  const now = Date.now();
+  const cached = queryCache.get(cacheKey) as CacheEntry<T> | undefined;
+  if (cached && cached.expiresAt > now) return cached.value;
+
+  const value = await fn();
+  queryCache.set(cacheKey, { value, expiresAt: now + ttl });
+  return value;
+}
+
+// ============================================================
 // Block Queries
 // ============================================================
 
@@ -58,7 +135,8 @@ export async function getBlockByHeight(height: number): Promise<Block | null> {
      FROM blocks WHERE height = $1`,
     [height],
   );
-  return result.rows.length > 0 ? mapBlock(result.rows[0]) : null;
+  const row = result.rows[0];
+  return row ? mapBlock(row) : null;
 }
 
 export async function getBlockByHash(hash: string): Promise<Block | null> {
@@ -67,25 +145,27 @@ export async function getBlockByHash(hash: string): Promise<Block | null> {
      FROM blocks WHERE hash = $1`,
     [hash],
   );
-  return result.rows.length > 0 ? mapBlock(result.rows[0]) : null;
+  const row = result.rows[0];
+  return row ? mapBlock(row) : null;
 }
 
 export async function getLatestBlocks(
   limit: number = 20,
   offset: number = 0,
 ): Promise<{ blocks: Block[]; total: number }> {
-  const [dataResult, countResult] = await Promise.all([
+  const [dataResult, total] = await Promise.all([
     query<Record<string, unknown>>(
       `SELECT height, hash, parent_hash, state_root, extrinsics_root, timestamp, validator_id, status, spec_version, event_count, extrinsic_count, digest_logs
        FROM blocks ORDER BY height DESC LIMIT $1 OFFSET $2`,
       [limit, offset],
     ),
-    query<{ count: string }>(`SELECT COUNT(*) as count FROM blocks`),
+    // Use pg_class.reltuples for instant unfiltered count
+    estimatedRowCount("blocks"),
   ]);
 
   return {
     blocks: dataResult.rows.map(mapBlock),
-    total: parseInt(countResult.rows[0].count, 10),
+    total,
   };
 }
 
@@ -170,17 +250,21 @@ export async function getExtrinsicsList(
 
   const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : ``;
 
-  const [dataRes, countRes] = await Promise.all([
+  const hasFilters = conditions.length > 0;
+  const countKey = `extrinsics:${where}:${params.join(",")}`;
+  const [dataRes, total] = await Promise.all([
     query<Record<string, unknown>>(
       `SELECT id, block_height, tx_hash, index, signer, module, call, args, success, fee, tip
        FROM extrinsics ${where} ORDER BY block_height DESC, index DESC LIMIT $${idx++} OFFSET $${idx++}`,
       [...params, limit, offset],
     ),
-    query<{ count: string }>(`SELECT COUNT(*) AS count FROM extrinsics ${where}`, params),
+    hasFilters
+      ? cachedCount(countKey, `SELECT COUNT(*) AS count FROM extrinsics ${where}`, params)
+      : estimatedRowCount("extrinsics"),
   ]);
   return {
     data: dataRes.rows.map(mapExtrinsic),
-    total: parseInt(countRes.rows[0].count, 10),
+    total,
   };
 }
 
@@ -190,7 +274,8 @@ export async function getExtrinsicByHash(txHash: string): Promise<Extrinsic | nu
      FROM extrinsics WHERE tx_hash = $1 LIMIT 1`,
     [txHash],
   );
-  return result.rows.length > 0 ? mapExtrinsic(result.rows[0]) : null;
+  const row = result.rows[0];
+  return row ? mapExtrinsic(row) : null;
 }
 
 export async function getExtrinsicById(id: string): Promise<Extrinsic | null> {
@@ -199,7 +284,8 @@ export async function getExtrinsicById(id: string): Promise<Extrinsic | null> {
      FROM extrinsics WHERE id = $1 LIMIT 1`,
     [id],
   );
-  return result.rows.length > 0 ? mapExtrinsic(result.rows[0]) : null;
+  const row = result.rows[0];
+  return row ? mapExtrinsic(row) : null;
 }
 
 export async function getExtrinsicsBySigner(
@@ -295,49 +381,55 @@ export async function getEventsList(
   }
   const whereCount = countConditions.length > 0 ? `WHERE ${countConditions.join(" AND ")}` : ``;
 
-  const [dataRes, countRes] = await Promise.all([
+  const hasFilters = conditions.length > 0;
+  const eventsCountKey = `events:${whereCount}:${countParams.join(",")}`;
+  const [dataRes, total] = await Promise.all([
     query<Record<string, unknown>>(
       `SELECT id, block_height, extrinsic_id, index, module, event, data, phase_type, phase_index
        FROM events ${whereData} ORDER BY block_height DESC, index DESC LIMIT $1 OFFSET $2`,
       dataParams,
     ),
-    query<{ count: string }>(
-      `SELECT COUNT(*) AS count FROM events ${whereCount}`,
-      countParams,
-    ),
+    // Use pg_class.reltuples for instant unfiltered counts (~0ms vs 1.2s for 27M rows)
+    hasFilters
+      ? cachedCount(eventsCountKey, `SELECT COUNT(*) AS count FROM events ${whereCount}`, countParams)
+      : estimatedRowCount("events"),
   ]);
   return {
     data: dataRes.rows.map(mapEvent),
-    total: parseInt(countRes.rows[0].count, 10),
+    total,
   };
 }
 
-/** Get distinct modules and their calls from the extrinsics table */
+/** Get distinct modules and their calls from the extrinsics table (cached 2min) */
 export async function getExtrinsicModules(): Promise<{ module: string; calls: string[] }[]> {
-  const result = await query<{ module: string; call: string }>(
-    `SELECT DISTINCT module, call FROM extrinsics ORDER BY module, call`,
-  );
-  const map = new Map<string, string[]>();
-  for (const row of result.rows) {
-    const existing = map.get(row.module) ?? [];
-    existing.push(row.call);
-    map.set(row.module, existing);
-  }
-  return Array.from(map.entries()).map(([module, calls]) => ({ module, calls }));
+  return cachedQuery("extrinsicModules", async () => {
+    const result = await query<{ module: string; call: string }>(
+      `SELECT DISTINCT module, call FROM extrinsics ORDER BY module, call`,
+    );
+    const map = new Map<string, string[]>();
+    for (const row of result.rows) {
+      const existing = map.get(row.module) ?? [];
+      existing.push(row.call);
+      map.set(row.module, existing);
+    }
+    return Array.from(map.entries()).map(([module, calls]) => ({ module, calls }));
+  });
 }
 
-/** Get distinct modules and their event types from the events table */
+/** Get distinct modules and their event types from the events table (cached 2min) */
 export async function getEventModules(): Promise<{ module: string; events: string[] }[]> {
-  const result = await query<{ module: string; event: string }>(
-    `SELECT DISTINCT module, event FROM events ORDER BY module, event`,
-  );
-  const map = new Map<string, string[]>();
-  for (const row of result.rows) {
-    const existing = map.get(row.module) ?? [];
-    existing.push(row.event);
-    map.set(row.module, existing);
-  }
-  return Array.from(map.entries()).map(([module, events]) => ({ module, events }));
+  return cachedQuery("eventModules", async () => {
+    const result = await query<{ module: string; event: string }>(
+      `SELECT DISTINCT module, event FROM events ORDER BY module, event`,
+    );
+    const map = new Map<string, string[]>();
+    for (const row of result.rows) {
+      const existing = map.get(row.module) ?? [];
+      existing.push(row.event);
+      map.set(row.module, existing);
+    }
+    return Array.from(map.entries()).map(([module, events]) => ({ module, events }));
+  });
 }
 
 export async function getTransfersList(
@@ -354,7 +446,7 @@ export async function getTransfersList(
   }[];
   total: number;
 }> {
-  const [dataRes, countRes] = await Promise.all([
+  const [dataRes, total] = await Promise.all([
     query<Record<string, unknown>>(
       `SELECT e.id as event_id, e.extrinsic_id, e.block_height, e.data,
               b.timestamp
@@ -365,7 +457,8 @@ export async function getTransfersList(
        LIMIT $1 OFFSET $2`,
       [limit, offset],
     ),
-    query<{ count: string }>(
+    cachedCount(
+      "transfers",
       `SELECT COUNT(*) AS count FROM events WHERE module = 'Balances' AND event IN ('Transfer', 'transfer')`,
     ),
   ]);
@@ -381,7 +474,7 @@ export async function getTransfersList(
       to: String(d.to ?? d.dest ?? ""),
     };
   });
-  return { data, total: parseInt(countRes.rows[0].count, 10) };
+  return { data, total };
 }
 
 // ============================================================
@@ -402,7 +495,7 @@ export async function getAccounts(
   limit = 25,
   offset = 0,
 ): Promise<{ data: AccountListItem[]; total: number }> {
-  const [dataRes, countRes] = await Promise.all([
+  const [dataRes, total] = await Promise.all([
     query<Record<string, unknown>>(
       `SELECT a.address, a.public_key, a.identity, a.last_active_block, a.created_at_block,
               b.free, b.reserved, b.frozen, b.flags,
@@ -416,10 +509,9 @@ export async function getAccounts(
        LIMIT $1 OFFSET $2`,
       [limit, offset],
     ),
-    query<{ count: string }>(`SELECT COUNT(*) AS count FROM accounts`),
+    cachedCount("accounts", `SELECT COUNT(*) AS count FROM accounts`),
   ]);
 
-  const total = parseInt(countRes.rows[0].count, 10);
   const data: AccountListItem[] = dataRes.rows.map((row) => ({
     address: row.address as string,
     publicKey: row.public_key as string,
@@ -489,7 +581,7 @@ export async function getAccount(
   );
   if (result.rows.length === 0) return null;
 
-  const row = result.rows[0];
+  const row = result.rows[0]!;
   return {
     address: row.address as string,
     publicKey: row.public_key as string,
@@ -517,7 +609,7 @@ export async function getIndexerState(chainId: string): Promise<IndexerStatus | 
     [chainId],
   );
   if (result.rows.length === 0) return null;
-  const row = result.rows[0];
+  const row = result.rows[0]!;
   return {
     chainId: row.chain_id as string,
     lastFinalizedBlock: Number(row.last_finalized_block),
@@ -559,23 +651,24 @@ export async function getChainStats(): Promise<{
   transfers: number;
   totalAccounts: number;
 }> {
-  const [blockRes, finRes, signedRes, transferRes, accountRes] = await Promise.all([
+  const [blockRes, finRes, signedExtrinsics, transfers, totalAccounts] = await Promise.all([
     query<{ height: string | null }>(`SELECT MAX(height) as height FROM blocks`),
     query<{ height: string | null }>(
       `SELECT MAX(height) as height FROM blocks WHERE status = 'finalized'`,
     ),
-    query<{ count: string }>(`SELECT COUNT(*) as count FROM extrinsics WHERE signer IS NOT NULL`),
-    query<{ count: string }>(
+    cachedCount("signed_extrinsics", `SELECT COUNT(*) as count FROM extrinsics WHERE signer IS NOT NULL`),
+    cachedCount(
+      "transfers",
       `SELECT COUNT(*) as count FROM events WHERE module = 'Balances' AND event IN ('Transfer', 'transfer')`,
     ),
-    query<{ count: string }>(`SELECT COUNT(*) as count FROM accounts`),
+    cachedCount("accounts", `SELECT COUNT(*) as count FROM accounts`),
   ]);
   return {
     latestBlock: blockRes.rows[0]?.height ? parseInt(String(blockRes.rows[0].height), 10) : 0,
     finalizedBlock: finRes.rows[0]?.height ? parseInt(String(finRes.rows[0].height), 10) : 0,
-    signedExtrinsics: parseInt(signedRes.rows[0].count, 10),
-    transfers: parseInt(transferRes.rows[0].count, 10),
-    totalAccounts: parseInt(accountRes.rows[0].count, 10),
+    signedExtrinsics,
+    transfers,
+    totalAccounts,
   };
 }
 
@@ -633,7 +726,7 @@ export async function getAccountTransfers(
   }[];
   total: number;
 }> {
-  const [dataRes, countRes] = await Promise.all([
+  const [dataRes, total] = await Promise.all([
     query<Record<string, unknown>>(
       `SELECT e.id as event_id, e.extrinsic_id, e.block_height, e.data,
               b.timestamp
@@ -645,7 +738,8 @@ export async function getAccountTransfers(
        LIMIT $2 OFFSET $3`,
       [address, limit, offset],
     ),
-    query<{ count: string }>(
+    cachedCount(
+      `account_transfers:${address}`,
       `SELECT COUNT(*) AS count
        FROM events
        WHERE module = 'Balances' AND event IN ('Transfer', 'transfer')
@@ -665,7 +759,7 @@ export async function getAccountTransfers(
       to: String(d.to ?? d.dest ?? ""),
     };
   });
-  return { data, total: parseInt(countRes.rows[0].count, 10) };
+  return { data, total };
 }
 
 export async function searchByHash(
@@ -805,7 +899,7 @@ export async function getDigestLogs(
   }[];
   total: number;
 }> {
-  const [dataResult, countResult] = await Promise.all([
+  const [dataResult, total] = await Promise.all([
     query<{
       block_height: string;
       log_index: string;
@@ -813,22 +907,34 @@ export async function getDigestLogs(
       engine: string | null;
       log_data: string;
     }>(
-      `SELECT b.height as block_height,
+      // CTE limits blocks first, then expands JSONB only for the needed window.
+      // This avoids scanning+expanding all 11M+ blocks on every request.
+      `WITH ranked_blocks AS (
+         SELECT height, digest_logs
+         FROM blocks
+         WHERE digest_logs IS NOT NULL AND jsonb_array_length(digest_logs) > 0
+         ORDER BY height DESC
+         LIMIT $3
+       )
+       SELECT b.height as block_height,
               (row_number() OVER (PARTITION BY b.height ORDER BY idx.ordinality)) as log_index,
               idx.elem->>'type' as log_type,
               idx.elem->>'engine' as engine,
               idx.elem->>'data' as log_data
-       FROM blocks b,
+       FROM ranked_blocks b,
             LATERAL jsonb_array_elements(b.digest_logs) WITH ORDINALITY AS idx(elem, ordinality)
-       WHERE b.digest_logs IS NOT NULL AND jsonb_array_length(b.digest_logs) > 0
        ORDER BY b.height DESC, idx.ordinality
        LIMIT $1 OFFSET $2`,
-      [limit, offset],
+      [limit, offset, limit + offset],
     ),
-    query<{ count: string }>(
+    // Cache the expensive SUM(jsonb_array_length) for 2 minutes
+    cachedCount(
+      "logs_total",
       `SELECT SUM(jsonb_array_length(digest_logs))::text as count
        FROM blocks
        WHERE digest_logs IS NOT NULL AND jsonb_array_length(digest_logs) > 0`,
+      [],
+      SLOW_CACHE_TTL_MS,
     ),
   ]);
 
@@ -840,7 +946,7 @@ export async function getDigestLogs(
       engine: r.engine,
       data: r.log_data,
     })),
-    total: parseInt(countResult.rows[0]?.count ?? "0", 10),
+    total,
   };
 }
 

@@ -32,8 +32,8 @@ export default tseslint.config(
         "warn",
         { argsIgnorePattern: "^_", varsIgnorePattern: "^_" },
       ],
-      // Allow explicit `any` — too many SCALE/metadata types are genuinely untyped
-      "@typescript-eslint/no-explicit-any": "off",
+      // Warn on explicit `any` — prefer `unknown` with type guards
+      "@typescript-eslint/no-explicit-any": "warn",
       // Require `const` for values that are never reassigned
       "prefer-const": "warn",
       // No console.log in library code (warn, not error — consoles are fine in indexer main)
@@ -57,6 +57,7 @@ export default tseslint.config(
     files: ["**/__tests__/**", "**/*.test.ts", "**/*.spec.ts"],
     rules: {
       "@typescript-eslint/no-unused-vars": "off",
+      "@typescript-eslint/no-explicit-any": "off",
       "@typescript-eslint/no-non-null-assertion": "off",
     },
   },
