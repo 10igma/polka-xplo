@@ -1,4 +1,5 @@
 import type { BlockContext, ExplorerEvent } from "@polka-xplo/shared";
+import { DEFAULT_CONFIG, getChainConfig } from "@polka-xplo/shared";
 import { query } from "@polka-xplo/db";
 import fs from "node:fs";
 import path from "node:path";
@@ -280,19 +281,16 @@ async function extractXTokensTransfer(
 }
 
 /**
- * Resolve the native token symbol from chain config or well-known defaults.
+ * Resolve the native token symbol from chain config.
+ * Uses the CHAIN_ID environment variable to look up the correct chain configuration.
  */
+let _cachedSymbol: string | null = null;
 async function resolveNativeSymbol(): Promise<string> {
-  // The native token is not in the assets table (that tracks foreign assets).
-  // Read from chain-config.json if available, otherwise use fallback.
-  try {
-    const configPath = path.resolve(__dirname, "..", "..", "..", "chain-config.json");
-    const config = JSON.parse(fs.readFileSync(configPath, "utf-8"));
-    if (config.token) return String(config.token);
-  } catch {
-    // chain-config.json may not exist in this context
-  }
-  return "AJUN";
+  if (_cachedSymbol) return _cachedSymbol;
+  const chainId = process.env.CHAIN_ID ?? DEFAULT_CONFIG.defaultChain;
+  const chainConfig = getChainConfig(DEFAULT_CONFIG, chainId);
+  _cachedSymbol = chainConfig?.tokenSymbol ?? "DOT";
+  return _cachedSymbol;
 }
 
 /**
