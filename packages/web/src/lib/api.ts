@@ -295,6 +295,32 @@ export async function getStats(): Promise<ChainStats> {
   return fetchJson("/api/stats");
 }
 
+// ---- Activity (time-series) ----
+
+export type ActivityPeriod = "hour" | "day" | "week" | "month";
+
+export interface ActivityBucket {
+  timestamp: number;
+  label: string;
+  extrinsics: number;
+  events: number;
+  blocks: number;
+  transfers: number;
+}
+
+export interface ActivityResponse {
+  period: string;
+  count: number;
+  data: ActivityBucket[];
+}
+
+export async function getActivity(
+  period: ActivityPeriod = "day",
+  limit = 30,
+): Promise<ActivityResponse> {
+  return fetchJson(`/api/stats/activity?period=${period}&limit=${limit}`);
+}
+
 // ---- Transfers ----
 
 export interface TransferSummary {

@@ -11,6 +11,7 @@ import { ChainOverview } from "@/components/ChainOverview";
 import { StatsBar } from "@/components/StatsBar";
 import { LatestBlocksCard } from "@/components/LatestBlocksCard";
 import { LatestTransfersCard } from "@/components/LatestTransfersCard";
+import { ActivityChart } from "@/components/ActivityChart";
 import { theme } from "@/lib/theme";
 
 export const dynamic = "force-dynamic";
@@ -57,6 +58,9 @@ export default async function HomePage() {
 
       {/* Stats bar */}
       {stats && <StatsBar stats={stats} />}
+
+      {/* Chain Activity Chart */}
+      <ActivityChart />
 
       {/* Two-column: Latest Blocks + Latest Transfers */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
