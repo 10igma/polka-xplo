@@ -914,7 +914,7 @@ export async function getDigestLogs(
          FROM blocks
          WHERE digest_logs IS NOT NULL AND jsonb_array_length(digest_logs) > 0
          ORDER BY height DESC
-         LIMIT $1 + $2
+         LIMIT $3
        )
        SELECT b.height as block_height,
               (row_number() OVER (PARTITION BY b.height ORDER BY idx.ordinality)) as log_index,
@@ -925,7 +925,7 @@ export async function getDigestLogs(
             LATERAL jsonb_array_elements(b.digest_logs) WITH ORDINALITY AS idx(elem, ordinality)
        ORDER BY b.height DESC, idx.ordinality
        LIMIT $1 OFFSET $2`,
-      [limit, offset],
+      [limit, offset, limit + offset],
     ),
     // Cache the expensive SUM(jsonb_array_length) for 2 minutes
     cachedCount(
