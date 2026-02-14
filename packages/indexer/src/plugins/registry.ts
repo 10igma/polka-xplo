@@ -8,7 +8,7 @@ import type {
   Extrinsic,
   ExplorerEvent,
 } from "@polka-xplo/shared";
-import { query } from "@polka-xplo/db";
+import { query, transaction } from "@polka-xplo/db";
 
 /**
  * The Plugin Registry manages extension lifecycle:
@@ -126,11 +126,13 @@ export class PluginRegistry {
       console.log(`[Registry] Running migration for ${ext.manifest.name} v${ext.manifest.version}`);
 
       const sql = ext.getMigrationSQL();
-      await query(sql);
-      await query(`INSERT INTO extension_migrations (extension_id, version) VALUES ($1, $2)`, [
-        ext.manifest.id,
-        ext.manifest.version,
-      ]);
+      await transaction(async (client) => {
+        await client.query(sql);
+        await client.query(
+          `INSERT INTO extension_migrations (extension_id, version) VALUES ($1, $2)`,
+          [ext.manifest.id, ext.manifest.version],
+        );
+      });
 
       console.log(`[Registry] Migration complete: ${migrationKey}`);
       newlyMigrated.push(ext);
