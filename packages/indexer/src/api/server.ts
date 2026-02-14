@@ -2464,8 +2464,9 @@ export function createApiServer(
         params.push(toChain);
       }
       if (address) {
+        const hexAddr = normalizeAddress(address) ?? address;
         conditions.push(`(t.from_address = $${idx} OR t.to_address = $${idx})`);
-        params.push(address);
+        params.push(hexAddr);
         idx++;
       }
 

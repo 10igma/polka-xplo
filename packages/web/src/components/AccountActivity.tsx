@@ -137,7 +137,7 @@ export function AccountActivity({
       try {
         const offset = (page - 1) * pageSize;
         const res = await fetch(
-          `${API_BASE}/api/xcm/transfers?address=${encodeURIComponent(address)}&limit=${pageSize}&offset=${offset}`,
+          `${API_BASE}/api/xcm/transfers?address=${encodeURIComponent(hexAddress ?? address)}&limit=${pageSize}&offset=${offset}`,
         );
         if (!res.ok) throw new Error(`${res.status}`);
         const json = await res.json();
