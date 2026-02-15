@@ -97,11 +97,9 @@ class IndexerMetrics {
     this.state = state;
   }
 
-  /** Update the known chain tip */
+  /** Update the known chain tip (always accept latest, tip can decrease on reorgs) */
   setChainTip(tip: number): void {
-    if (tip > this.chainTip) {
-      this.chainTip = tip;
-    }
+    this.chainTip = tip;
   }
 
   /** Seed the indexed height from the database on startup */
@@ -127,7 +125,11 @@ class IndexerMetrics {
 
     const blocksRemaining = Math.max(0, this.chainTip - this.indexedHeight);
     const syncPercent =
-      this.chainTip > 0 ? Math.min(100, (this.indexedHeight / this.chainTip) * 100) : 0;
+      this.chainTip > 0
+        ? this.indexedHeight >= this.chainTip
+          ? 100
+          : (this.indexedHeight / this.chainTip) * 100
+        : 0;
 
     // ETA: use blocks/minute rate (more responsive than hourly)
     let etaSeconds: number | null = null;

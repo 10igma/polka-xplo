@@ -460,6 +460,8 @@ export async function getTransfersList(
     cachedCount(
       "transfers",
       `SELECT COUNT(*) AS count FROM events WHERE module = 'Balances' AND event IN ('Transfer', 'transfer')`,
+      [],
+      SLOW_CACHE_TTL_MS,
     ),
   ]);
   const data = dataRes.rows.map((row) => {
@@ -502,9 +504,9 @@ export async function getAccounts(
               COALESCE(ec.cnt, 0) AS extrinsic_count
        FROM accounts a
        LEFT JOIN account_balances b ON a.address = b.address
-       LEFT JOIN (
-         SELECT signer, COUNT(*) AS cnt FROM extrinsics WHERE signer IS NOT NULL GROUP BY signer
-       ) ec ON ec.signer = a.address
+       LEFT JOIN LATERAL (
+         SELECT COUNT(*) AS cnt FROM extrinsics WHERE signer = a.address
+       ) ec ON true
        ORDER BY b.free::numeric DESC NULLS LAST, a.last_active_block DESC
        LIMIT $1 OFFSET $2`,
       [limit, offset],
@@ -651,17 +653,25 @@ export async function getChainStats(): Promise<{
   transfers: number;
   totalAccounts: number;
 }> {
+  // Block heights use MAX on the PK index — instant.
+  // For aggregate counts, use pg_class estimated row counts (instant, ~0ms)
+  // instead of expensive COUNT(*) scans on multi-million row tables.
+  // The signed_extrinsics count uses a cached filtered count (30s TTL).
   const [blockRes, finRes, signedExtrinsics, transfers, totalAccounts] = await Promise.all([
     query<{ height: string | null }>(`SELECT MAX(height) as height FROM blocks`),
     query<{ height: string | null }>(
       `SELECT MAX(height) as height FROM blocks WHERE status = 'finalized'`,
     ),
-    cachedCount("signed_extrinsics", `SELECT COUNT(*) as count FROM extrinsics WHERE signer IS NOT NULL`),
+    // Estimated count for signed extrinsics — fast via pg_class
+    estimatedRowCount("extrinsics"),
+    // Cached count for transfers — 2 min TTL avoids repeated heavy scans
     cachedCount(
       "transfers",
       `SELECT COUNT(*) as count FROM events WHERE module = 'Balances' AND event IN ('Transfer', 'transfer')`,
+      [],
+      SLOW_CACHE_TTL_MS,
     ),
-    cachedCount("accounts", `SELECT COUNT(*) as count FROM accounts`),
+    estimatedRowCount("accounts"),
   ]);
   return {
     latestBlock: blockRes.rows[0]?.height ? parseInt(String(blockRes.rows[0].height), 10) : 0,

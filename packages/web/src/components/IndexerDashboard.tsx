@@ -69,17 +69,23 @@ export function IndexerDashboard() {
     return <div className="text-center py-12 text-zinc-500">Loading indexer status...</div>;
   }
 
+  // When indexer is ahead of or at chain tip, treat as "live" regardless of state field
+  const isEffectivelyLive =
+    status.state === "live" || (status.syncPercent >= 100 && status.blocksRemaining === 0);
+
+  const displayState = isEffectivelyLive ? "live" : status.state;
+
   const stateColor =
-    status.state === "live"
+    displayState === "live"
       ? "text-green-400"
-      : status.state === "syncing"
+      : displayState === "syncing"
         ? "text-yellow-400"
         : "text-zinc-500";
 
   const stateBg =
-    status.state === "live"
+    displayState === "live"
       ? "bg-green-900/40"
-      : status.state === "syncing"
+      : displayState === "syncing"
         ? "bg-yellow-900/40"
         : "bg-zinc-800";
 
@@ -90,7 +96,7 @@ export function IndexerDashboard() {
         <div className="flex items-center justify-between">
           <h2 className="text-base font-semibold text-zinc-100">Sync Progress</h2>
           <span className={`px-2.5 py-1 rounded text-xs font-medium ${stateBg} ${stateColor}`}>
-            {status.state.toUpperCase()}
+            {displayState.toUpperCase()}
           </span>
         </div>
 
@@ -98,7 +104,11 @@ export function IndexerDashboard() {
         <div>
           <div className="flex items-center justify-between text-xs text-zinc-400 mb-1.5">
             <span>Block #{formatNumber(status.indexedHeight)}</span>
-            <span>{status.syncPercent.toFixed(2)}%</span>
+            <span>
+              {status.indexedHeight > status.chainTip
+                ? `100% (+${formatNumber(status.indexedHeight - status.chainTip)} ahead)`
+                : `${status.syncPercent.toFixed(2)}%`}
+            </span>
             <span>Chain tip #{formatNumber(status.chainTip)}</span>
           </div>
           <div className="w-full h-3 bg-zinc-800 rounded-full overflow-hidden">
