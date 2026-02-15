@@ -87,23 +87,54 @@ export function register(app: Express, ctx: ApiContext): void {
    *                   nullable: true
    *                   description: Parachain ID (from ParachainInfo pallet, null for relay chains)
    */
+  // --- Chain properties cache (process-lifetime, populated async at startup) ---
+  // These come from RPC and rarely/never change, so we warm them once and reuse.
+  const defaultChainProps = { existentialDeposit: "0", tokenDecimals: 10, paraId: null as number | null };
+  let chainPropsCache: typeof defaultChainProps | null = null;
+  let chainPropsReady: Promise<void> | null = null;
+
+  if (ctx.rpcPool) {
+    const pool = ctx.rpcPool;
+    chainPropsReady = Promise.all([
+      getExistentialDeposit(pool),
+      getSystemProperties(pool),
+      getParachainId(pool),
+    ])
+      .then(([ed, props, paraId]) => {
+        chainPropsCache = {
+          existentialDeposit: ed,
+          tokenDecimals: props.tokenDecimals,
+          paraId,
+        };
+      })
+      .catch(() => {
+        // Will retry on next buildStatsResponse call
+      });
+  }
+
   // --- Helper: build the stats response ---
   async function buildStatsResponse() {
-    const [stats, chainProps] = await Promise.all([
-      getChainStats(),
-      ctx.rpcPool
-        ? Promise.all([
-            getExistentialDeposit(ctx.rpcPool),
-            getSystemProperties(ctx.rpcPool),
-            getParachainId(ctx.rpcPool),
-          ]).then(([ed, props, paraId]) => ({
-            existentialDeposit: ed,
-            tokenDecimals: props.tokenDecimals,
-            paraId,
-          }))
-        : Promise.resolve({ existentialDeposit: "0", tokenDecimals: 10, paraId: null }),
-    ]);
-    return { ...stats, ...chainProps };
+    const stats = await getChainStats();
+
+    // If chain props aren't cached yet, try fetching them (non-blocking for future calls)
+    if (!chainPropsCache && ctx.rpcPool) {
+      try {
+        const [ed, props, paraId] = await Promise.all([
+          getExistentialDeposit(ctx.rpcPool),
+          getSystemProperties(ctx.rpcPool),
+          getParachainId(ctx.rpcPool),
+        ]);
+        chainPropsCache = {
+          existentialDeposit: ed,
+          tokenDecimals: props.tokenDecimals,
+          paraId,
+        };
+      } catch {
+        // Use defaults until RPC is available
+      }
+    }
+
+    return { ...stats, ...(chainPropsCache ?? defaultChainProps) };
   }
 
   // --- Background refresh: warm the cache every 6s so users never wait ---
@@ -128,9 +159,14 @@ export function register(app: Express, ctx: ApiContext): void {
         res.json(statsCache.data);
         return;
       }
-      // Fallback: build synchronously on first request if background hasn't finished yet
-      const data = await buildStatsResponse();
-      statsCache = { data, expiresAt: Date.now() + STATS_TTL_MS };
+      // Fallback: return DB stats immediately with whatever chain props we have.
+      // Don't block on RPC — the background refresh will populate it soon.
+      const stats = await getChainStats();
+      const data = { ...stats, ...(chainPropsCache ?? defaultChainProps) };
+      // Only cache if we have chain props, otherwise let background refresh populate a complete cache
+      if (chainPropsCache) {
+        statsCache = { data, expiresAt: Date.now() + STATS_TTL_MS };
+      }
       res.json(data);
     } catch {
       res.status(500).json({ error: "Failed to fetch stats" });
