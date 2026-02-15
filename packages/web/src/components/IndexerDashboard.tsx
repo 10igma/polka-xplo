@@ -73,21 +73,31 @@ export function IndexerDashboard() {
   const isEffectivelyLive =
     status.state === "live" || (status.syncPercent >= 100 && status.blocksRemaining === 0);
 
-  const displayState = isEffectivelyLive ? "live" : status.state;
+  const isInitializing = status.state === "initializing";
+
+  const displayState = isInitializing
+    ? "initializing"
+    : isEffectivelyLive
+      ? "live"
+      : status.state;
 
   const stateColor =
     displayState === "live"
       ? "text-green-400"
-      : displayState === "syncing"
-        ? "text-yellow-400"
-        : "text-zinc-500";
+      : displayState === "initializing"
+        ? "text-blue-400"
+        : displayState === "syncing"
+          ? "text-yellow-400"
+          : "text-zinc-500";
 
   const stateBg =
     displayState === "live"
       ? "bg-green-900/40"
-      : displayState === "syncing"
-        ? "bg-yellow-900/40"
-        : "bg-zinc-800";
+      : displayState === "initializing"
+        ? "bg-blue-900/40"
+        : displayState === "syncing"
+          ? "bg-yellow-900/40"
+          : "bg-zinc-800";
 
   return (
     <div className="space-y-6">
@@ -99,6 +109,34 @@ export function IndexerDashboard() {
             {displayState.toUpperCase()}
           </span>
         </div>
+
+        {/* Initializing info banner */}
+        {isInitializing && status.initInfo && (
+          <div className="rounded-lg border border-blue-800/50 bg-blue-950/30 p-3 space-y-2">
+            <div className="flex items-center gap-2">
+              <svg className="animate-spin h-4 w-4 text-blue-400" viewBox="0 0 24 24" fill="none">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              </svg>
+              <span className="text-sm font-medium text-blue-300">
+                Warming up caches &amp; RPC connections ({status.initInfo.elapsedSeconds}s)
+              </span>
+            </div>
+            <div className="grid grid-cols-2 gap-2 text-xs">
+              <div className="flex items-center gap-1.5">
+                <span className={`inline-block w-2 h-2 rounded-full ${status.initInfo.statsCacheReady ? "bg-green-400" : "bg-zinc-600 animate-pulse"}`} />
+                <span className="text-zinc-400">Stats cache</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className={`inline-block w-2 h-2 rounded-full ${status.initInfo.chainPropsReady ? "bg-green-400" : "bg-zinc-600 animate-pulse"}`} />
+                <span className="text-zinc-400">Chain properties (RPC)</span>
+              </div>
+            </div>
+            <p className="text-xs text-zinc-500">
+              First page load may show placeholder values until initialization completes.
+            </p>
+          </div>
+        )}
 
         {/* Progress bar */}
         <div>
@@ -442,14 +480,12 @@ function CacheStatusSection({ caches }: { caches: CacheInfo }) {
             Activity Charts
           </h3>
           {caches.activity.map((a) => {
-            // Infer TTL from expiresAt and nextRefreshMs for the bar
-            const totalMs = a.expiresAt - (Date.now() - a.nextRefreshMs + a.nextRefreshMs);
             // We know the TTLs: hour=60s, day=300s, week=600s, month=1800s
             const ttlLookup: Record<string, number> = {
               hour: 60_000, day: 300_000, week: 600_000, month: 1_800_000,
             };
             const period = a.key.split(":")[1] ?? "";
-            const knownTtl = ttlLookup[period] ?? totalMs;
+            const knownTtl = ttlLookup[period] ?? a.nextRefreshMs;
             return (
               <CacheCountdownBar
                 key={a.key}
