@@ -1,11 +1,10 @@
+import { Suspense } from "react";
 import {
   getBlocks,
   getStats,
   getTransfers,
   getSpecVersions,
-  type BlockSummary,
   type ChainStats,
-  type TransferSummary,
 } from "@/lib/api";
 import { ChainOverview } from "@/components/ChainOverview";
 import { StatsBar } from "@/components/StatsBar";
@@ -14,56 +13,100 @@ import { LatestTransfersCard } from "@/components/LatestTransfersCard";
 import Link from "next/link";
 import { ActivityChartWrapper } from "@/components/ActivityChartWrapper";
 import { theme } from "@/lib/theme";
+import { SkeletonCard } from "@/components/Skeleton";
 
 export const dynamic = "force-dynamic";
 
-/**
- * Home page: chain overview panel, stats bar,
- * latest blocks, and latest signed transfers.
- */
-export default async function HomePage() {
-  let blocks: BlockSummary[] = [];
+// ---- Async server components for streaming ----
+
+/** Light section: stats + overview. Usually the fastest API call. */
+async function ChainStatsSection() {
   let stats: ChainStats | null = null;
-  let transfers: TransferSummary[] = [];
   let specVersion: number | null = null;
-  let error: string | null = null;
 
   try {
-    const [blocksRes, statsRes, transfersRes, specRes] = await Promise.all([
-      getBlocks(10, 0),
+    const [statsRes, specRes] = await Promise.all([
       getStats(),
-      getTransfers(10),
       getSpecVersions().catch(() => ({ versions: [] })),
     ]);
-    blocks = blocksRes.data;
     stats = statsRes;
-    transfers = transfersRes;
     if (specRes.versions.length > 0) {
       specVersion = specRes.versions[0]!.specVersion;
     }
   } catch {
-    error = "Unable to connect to the indexer. Is the backend running?";
+    return (
+      <div className="rounded-lg border border-yellow-800/50 bg-yellow-950/30 p-3 text-sm text-yellow-300">
+        Unable to connect to the indexer. Is the backend running?
+      </div>
+    );
   }
 
   return (
-    <div className="space-y-6">
-      {/* Error banner */}
-      {error && (
-        <div className="rounded-lg border border-yellow-800/50 bg-yellow-950/30 p-3 text-sm text-yellow-300">
-          {error}
-        </div>
-      )}
-
-      {/* Chain overview */}
+    <>
       {stats && <ChainOverview theme={theme} stats={stats} specVersion={specVersion} />}
-
-      {/* Stats bar */}
       {stats && <StatsBar stats={stats} />}
+    </>
+  );
+}
 
-      {/* Chain Activity Chart */}
+/** Latest blocks card — streamed independently. */
+async function LatestBlocksSection() {
+  const blocksRes = await getBlocks(10, 0);
+  return <LatestBlocksCard blocks={blocksRes.data} />;
+}
+
+/** Latest transfers card — streamed independently. */
+async function LatestTransfersSection() {
+  const transfers = await getTransfers(10);
+  return (
+    <LatestTransfersCard
+      transfers={transfers}
+      tokenDecimals={theme.tokenDecimals}
+      tokenSymbol={theme.tokenSymbol}
+    />
+  );
+}
+
+// ---- Skeleton fallbacks ----
+
+function StatsSkeletonFallback() {
+  return (
+    <>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <SkeletonCard />
+        <SkeletonCard className="lg:col-span-2" />
+      </div>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <SkeletonCard />
+        <SkeletonCard />
+        <SkeletonCard />
+        <SkeletonCard />
+      </div>
+    </>
+  );
+}
+
+function CardSkeletonFallback() {
+  return <SkeletonCard className="h-64" />;
+}
+
+/**
+ * Home page: Uses React Suspense to stream each section independently.
+ * The shell renders instantly, then each async section fills in as its
+ * data arrives — no single slow query blocks the entire page.
+ */
+export default function HomePage() {
+  return (
+    <div className="space-y-6">
+      {/* Chain overview + stats bar — streams first */}
+      <Suspense fallback={<StatsSkeletonFallback />}>
+        <ChainStatsSection />
+      </Suspense>
+
+      {/* Chain Activity Chart — client-side, already lazy-loaded */}
       <ActivityChartWrapper />
 
-      {/* Two-column: Latest Blocks + Latest Transfers */}
+      {/* Two-column: Latest Blocks + Latest Transfers — streamed independently */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Latest Blocks */}
         <section>
@@ -74,7 +117,9 @@ export default async function HomePage() {
             </Link>
           </div>
           <div className="card">
-            <LatestBlocksCard blocks={blocks} />
+            <Suspense fallback={<CardSkeletonFallback />}>
+              <LatestBlocksSection />
+            </Suspense>
           </div>
         </section>
 
@@ -87,11 +132,9 @@ export default async function HomePage() {
             </Link>
           </div>
           <div className="card">
-            <LatestTransfersCard
-              transfers={transfers}
-              tokenDecimals={theme.tokenDecimals}
-              tokenSymbol={theme.tokenSymbol}
-            />
+            <Suspense fallback={<CardSkeletonFallback />}>
+              <LatestTransfersSection />
+            </Suspense>
           </div>
         </section>
       </div>
