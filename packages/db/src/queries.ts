@@ -26,6 +26,16 @@ const SLOW_CACHE_TTL_MS = 120_000;
 /** Cache for generic query results (counts, module lists, etc.) */
 const queryCache = new Map<string, CacheEntry<unknown>>();
 
+/** Return a snapshot of all query-cache entries and their expiry times. */
+export function getQueryCacheStatus(): { key: string; expiresAt: number; ttlMs: number }[] {
+  const now = Date.now();
+  const entries: { key: string; expiresAt: number; ttlMs: number }[] = [];
+  for (const [key, entry] of queryCache.entries()) {
+    entries.push({ key, expiresAt: entry.expiresAt, ttlMs: Math.max(0, entry.expiresAt - now) });
+  }
+  return entries;
+}
+
 /**
  * Execute a COUNT query with TTL-based caching.
  * The `cacheKey` must uniquely identify the query+params combination.
