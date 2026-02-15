@@ -4,6 +4,27 @@ import { getChainStats, query } from "@polka-xplo/db";
 import { getExistentialDeposit } from "../../runtime-parser.js";
 import { getSystemProperties, getParachainId } from "../../chain-state.js";
 
+// ---- Activity endpoint cache ----
+interface ActivityCacheEntry {
+  data: unknown;
+  expiresAt: number;
+}
+const activityCache = new Map<string, ActivityCacheEntry>();
+/** Cache TTL per period: hourly data changes faster, monthly rarely */
+const ACTIVITY_TTL: Record<string, number> = {
+  hour: 60_000,     // 1 minute
+  day: 300_000,     // 5 minutes
+  week: 600_000,    // 10 minutes
+  month: 1_800_000, // 30 minutes
+};
+/** How far back to scan per period (avoids full-table scans) */
+const LOOKBACK_INTERVALS: Record<string, string> = {
+  hour: "400 hours",   // generous margin over 365 hours
+  day: "400 days",
+  week: "200 weeks",
+  month: "400 months",
+};
+
 export function register(app: Express, ctx: ApiContext): void {
   /**
    * @openapi
@@ -110,40 +131,57 @@ export function register(app: Express, ctx: ApiContext): void {
         return;
       }
 
-      const result = await query(
-        `SELECT
-           date_trunc($1, to_timestamp(timestamp / 1000)) AS bucket,
-           SUM(extrinsic_count)::int AS extrinsics,
-           SUM(event_count)::int AS events,
-           COUNT(*)::int AS blocks
-         FROM blocks
-         WHERE timestamp IS NOT NULL
-         GROUP BY 1
-         ORDER BY 1 DESC
-         LIMIT $2`,
-        [trunc, limit],
-      );
-
-      // Also count transfers (Balances.Transfer events) per bucket
-      const transferResult = await query(
-        `SELECT
-           date_trunc($1, to_timestamp(b.timestamp / 1000)) AS bucket,
-           COUNT(*)::int AS transfers
-         FROM events e
-         JOIN blocks b ON b.height = e.block_height
-         WHERE b.timestamp IS NOT NULL
-           AND e.module = 'Balances' AND e.event IN ('Transfer', 'transfer')
-         GROUP BY 1
-         ORDER BY 1 DESC
-         LIMIT $2`,
-        [trunc, limit],
-      );
-
-      // Merge transfer counts into the main result
-      const transferMap = new Map<string, number>();
-      for (const row of transferResult.rows) {
-        transferMap.set(String(row.bucket), Number(row.transfers));
+      // ---- Cache check ----
+      const cacheKey = `activity:${period}:${limit}`;
+      const now = Date.now();
+      const cached = activityCache.get(cacheKey);
+      if (cached && cached.expiresAt > now) {
+        res.json(cached.data);
+        return;
       }
+
+      // ---- Single combined query with time-range filter ----
+      // Instead of scanning the entire blocks + events tables, restrict to
+      // a reasonable lookback window and combine both aggregations into one
+      // query using a LEFT JOIN, avoiding two full-table scans.
+      const lookback = LOOKBACK_INTERVALS[period] ?? "400 days";
+
+      const result = await query(
+        `WITH block_stats AS (
+           SELECT
+             date_trunc($1, to_timestamp(b.timestamp / 1000)) AS bucket,
+             SUM(b.extrinsic_count)::int AS extrinsics,
+             SUM(b.event_count)::int AS events,
+             COUNT(*)::int AS blocks
+           FROM blocks b
+           WHERE b.timestamp IS NOT NULL
+             AND b.timestamp >= (EXTRACT(EPOCH FROM NOW()) * 1000 - EXTRACT(EPOCH FROM INTERVAL '${lookback}') * 1000)::bigint
+           GROUP BY 1
+           ORDER BY 1 DESC
+           LIMIT $2
+         ),
+         transfer_stats AS (
+           SELECT
+             date_trunc($1, to_timestamp(b.timestamp / 1000)) AS bucket,
+             COUNT(*)::int AS transfers
+           FROM events e
+           JOIN blocks b ON b.height = e.block_height
+           WHERE b.timestamp IS NOT NULL
+             AND b.timestamp >= (EXTRACT(EPOCH FROM NOW()) * 1000 - EXTRACT(EPOCH FROM INTERVAL '${lookback}') * 1000)::bigint
+             AND e.module = 'Balances' AND e.event IN ('Transfer', 'transfer')
+           GROUP BY 1
+         )
+         SELECT
+           bs.bucket,
+           bs.extrinsics,
+           bs.events,
+           bs.blocks,
+           COALESCE(ts.transfers, 0)::int AS transfers
+         FROM block_stats bs
+         LEFT JOIN transfer_stats ts ON ts.bucket = bs.bucket
+         ORDER BY bs.bucket DESC`,
+        [trunc, limit],
+      );
 
       const data = result.rows
         .map((row: Record<string, unknown>) => ({
@@ -152,11 +190,17 @@ export function register(app: Express, ctx: ApiContext): void {
           extrinsics: Number(row.extrinsics),
           events: Number(row.events),
           blocks: Number(row.blocks),
-          transfers: transferMap.get(String(row.bucket)) ?? 0,
+          transfers: Number(row.transfers),
         }))
         .reverse(); // chronological order
 
-      res.json({ period, count: data.length, data });
+      const response = { period, count: data.length, data };
+
+      // ---- Populate cache ----
+      const ttl = ACTIVITY_TTL[period] ?? 300_000;
+      activityCache.set(cacheKey, { data: response, expiresAt: now + ttl });
+
+      res.json(response);
     } catch (err) {
       res.status(500).json({ error: String(err) });
     }
