@@ -431,6 +431,26 @@ export interface IndexerStatusResponse {
       weight: number;
     }[];
   };
+  caches?: {
+    stats: {
+      refreshIntervalMs: number;
+      nextRefreshMs: number;
+      expiresAt: number;
+    } | null;
+    activity: {
+      key: string;
+      nextRefreshMs: number;
+      expiresAt: number;
+    }[];
+    queryCache: {
+      size: number;
+      entries: {
+        key: string;
+        nextRefreshMs: number;
+        expiresAt: number;
+      }[];
+    };
+  };
 }
 
 export async function getIndexerStatus(): Promise<IndexerStatusResponse> {

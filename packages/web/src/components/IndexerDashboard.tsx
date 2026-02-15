@@ -241,6 +241,9 @@ export function IndexerDashboard() {
         </div>
       </section>
 
+      {/* Cache Status */}
+      {status.caches && <CacheStatusSection caches={status.caches} />}
+
       {/* Database */}
       <section className="card space-y-4">
         <div className="flex items-center justify-between">
@@ -375,5 +378,110 @@ function LatencyRow({
         {hasData ? stats.max.toFixed(1) : "—"}
       </td>
     </tr>
+  );
+}
+
+// ---- Cache status section ----
+
+type CacheInfo = NonNullable<import("@/lib/api").IndexerStatusResponse["caches"]>;
+
+function formatMs(ms: number): string {
+  if (ms <= 0) return "now";
+  if (ms < 1_000) return `${ms}ms`;
+  const s = Math.ceil(ms / 1_000);
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  const rs = s % 60;
+  return rs > 0 ? `${m}m ${rs}s` : `${m}m`;
+}
+
+function CacheCountdownBar({ label, nextRefreshMs, totalMs }: { label: string; nextRefreshMs: number; totalMs: number }) {
+  const pct = totalMs > 0 ? Math.min(100, (nextRefreshMs / totalMs) * 100) : 0;
+  const isExpired = nextRefreshMs <= 0;
+  return (
+    <div className="space-y-1">
+      <div className="flex items-center justify-between text-xs">
+        <span className="text-zinc-400 truncate mr-2">{label}</span>
+        <span className={isExpired ? "text-yellow-400" : "text-zinc-300"}>
+          {isExpired ? "refreshing…" : formatMs(nextRefreshMs)}
+        </span>
+      </div>
+      <div className="w-full h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+        <div
+          className={`h-full rounded-full transition-all duration-1000 ${isExpired ? "bg-yellow-500" : "bg-accent"}`}
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+    </div>
+  );
+}
+
+function CacheStatusSection({ caches }: { caches: CacheInfo }) {
+  return (
+    <section className="card space-y-4">
+      <h2 className="text-base font-semibold text-zinc-100">Cache Status</h2>
+
+      {/* Stats cache (background refresh) */}
+      {caches.stats && (
+        <div className="space-y-2">
+          <h3 className="text-xs font-medium text-zinc-400 uppercase tracking-wider">
+            Stats (background refresh every {formatMs(caches.stats.refreshIntervalMs)})
+          </h3>
+          <CacheCountdownBar
+            label="Chain stats"
+            nextRefreshMs={caches.stats.nextRefreshMs}
+            totalMs={caches.stats.refreshIntervalMs}
+          />
+        </div>
+      )}
+
+      {/* Activity caches */}
+      {caches.activity.length > 0 && (
+        <div className="space-y-2">
+          <h3 className="text-xs font-medium text-zinc-400 uppercase tracking-wider">
+            Activity Charts
+          </h3>
+          {caches.activity.map((a) => {
+            // Infer TTL from expiresAt and nextRefreshMs for the bar
+            const totalMs = a.expiresAt - (Date.now() - a.nextRefreshMs + a.nextRefreshMs);
+            // We know the TTLs: hour=60s, day=300s, week=600s, month=1800s
+            const ttlLookup: Record<string, number> = {
+              hour: 60_000, day: 300_000, week: 600_000, month: 1_800_000,
+            };
+            const period = a.key.split(":")[1] ?? "";
+            const knownTtl = ttlLookup[period] ?? totalMs;
+            return (
+              <CacheCountdownBar
+                key={a.key}
+                label={a.key.replace("activity:", "")}
+                nextRefreshMs={a.nextRefreshMs}
+                totalMs={knownTtl}
+              />
+            );
+          })}
+        </div>
+      )}
+
+      {/* Query cache */}
+      <div className="space-y-2">
+        <h3 className="text-xs font-medium text-zinc-400 uppercase tracking-wider">
+          Query Cache ({caches.queryCache.size} entries)
+        </h3>
+        {caches.queryCache.entries.length > 0 ? (
+          <div className="grid gap-1.5">
+            {caches.queryCache.entries.map((e) => (
+              <CacheCountdownBar
+                key={e.key}
+                label={e.key}
+                nextRefreshMs={e.nextRefreshMs}
+                totalMs={e.key.startsWith("estimated:") ? 30_000 : 120_000}
+              />
+            ))}
+          </div>
+        ) : (
+          <p className="text-xs text-zinc-500">No cached queries</p>
+        )}
+      </div>
+    </section>
   );
 }

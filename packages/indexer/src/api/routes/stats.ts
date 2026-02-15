@@ -17,6 +17,24 @@ const activityCache = new Map<string, CacheEntry>();
 const STATS_TTL_MS = 60_000; // 60 seconds
 let statsCache: CacheEntry | null = null;
 let statsRefreshTimer: ReturnType<typeof setInterval> | null = null;
+
+/** Return a snapshot of all stats / activity caches for the status dashboard. */
+export function getStatsCacheStatus(): {
+  stats: { expiresAt: number; ttlMs: number; refreshIntervalMs: number } | null;
+  activity: { key: string; expiresAt: number; ttlMs: number }[];
+} {
+  const now = Date.now();
+  return {
+    stats: statsCache
+      ? { expiresAt: statsCache.expiresAt, ttlMs: Math.max(0, statsCache.expiresAt - now), refreshIntervalMs: STATS_TTL_MS }
+      : null,
+    activity: [...activityCache.entries()].map(([key, entry]) => ({
+      key,
+      expiresAt: entry.expiresAt,
+      ttlMs: Math.max(0, entry.expiresAt - now),
+    })),
+  };
+}
 /** Cache TTL per period: hourly data changes faster, monthly rarely */
 const ACTIVITY_TTL: Record<string, number> = {
   hour: 60_000,     // 1 minute

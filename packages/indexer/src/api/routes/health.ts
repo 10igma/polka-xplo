@@ -5,8 +5,10 @@ import {
   getDatabaseSize,
   query,
   dbMetrics,
+  getQueryCacheStatus,
 } from "@polka-xplo/db";
 import { metrics } from "../../metrics.js";
+import { getStatsCacheStatus } from "./stats.js";
 
 export function register(app: Express, ctx: ApiContext): void {
   /**
@@ -116,6 +118,35 @@ export function register(app: Express, ctx: ApiContext): void {
         ? { endpointCount: ctx.rpcPool.size, endpoints: ctx.rpcPool.getStats() }
         : { endpointCount: 0, endpoints: [] };
       const cacheHitRatio = parseFloat(cacheHitResult.rows[0]?.ratio ?? "0");
+      // Gather cache status
+      const statsCtx = getStatsCacheStatus();
+      const queryCacheEntries = getQueryCacheStatus();
+      const now = Date.now();
+
+      // Summarise caches into a clean object for the dashboard
+      const caches = {
+        stats: statsCtx.stats
+          ? {
+              refreshIntervalMs: statsCtx.stats.refreshIntervalMs,
+              nextRefreshMs: statsCtx.stats.ttlMs,
+              expiresAt: statsCtx.stats.expiresAt,
+            }
+          : null,
+        activity: statsCtx.activity.map((a) => ({
+          key: a.key,
+          nextRefreshMs: a.ttlMs,
+          expiresAt: a.expiresAt,
+        })),
+        queryCache: {
+          size: queryCacheEntries.length,
+          entries: queryCacheEntries.map((e) => ({
+            key: e.key,
+            nextRefreshMs: e.ttlMs,
+            expiresAt: e.expiresAt,
+          })),
+        },
+      };
+
       res.json({
         ...snapshot,
         database: {
@@ -124,6 +155,7 @@ export function register(app: Express, ctx: ApiContext): void {
           ...dbMetrics.getSnapshot(),
         },
         rpc: rpcHealth,
+        caches,
       });
     } catch {
       res.status(500).json({ error: "Failed to collect indexer status" });
