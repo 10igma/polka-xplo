@@ -4,6 +4,8 @@ A modular, metadata-driven blockchain explorer for the Polkadot ecosystem. Built
 
 Polka-Xplo ingests, indexes, and serves blockchain data (blocks, extrinsics, events, accounts, balances, XCM messages) through a plugin-first architecture that adapts dynamically to runtime upgrades and custom pallet extensions.
 
+<img width="1297" height="1190" alt="image" src="https://github.com/user-attachments/assets/be6e3c1d-aec5-4be8-accb-04e7733a90a3" />
+
 ## Features
 
 - **Full chain indexing** — Blocks, extrinsics, events, accounts, balances with automatic backfill and live sync
