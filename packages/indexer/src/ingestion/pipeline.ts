@@ -46,6 +46,15 @@ export class IngestionPipeline {
   private finalizedUnsub: (() => void) | null = null;
   private bestUnsub: (() => void) | null = null;
 
+  /** Timestamp (ms) of the last finalized block received via PAPI subscription */
+  private lastFinalizedAt = 0;
+  /** Watchdog interval handle */
+  private watchdogInterval: ReturnType<typeof setInterval> | null = null;
+  /** How long (ms) without a finalized block before triggering process exit */
+  private static readonly STALL_THRESHOLD_MS = 2 * 60_000; // 2 minutes
+  /** How often (ms) the watchdog checks for stalls */
+  private static readonly WATCHDOG_INTERVAL_MS = 30_000; // 30 seconds
+
   constructor(papiClient: PapiClient, registry: PluginRegistry, rpcPool: RpcPool) {
     this.papiClient = papiClient;
     this.registry = registry;
@@ -66,8 +75,12 @@ export class IngestionPipeline {
     await this.backfill();
 
     // Phase 2: Subscribe to live streams
+    this.lastFinalizedAt = Date.now();
     this.subscribeFinalized();
     this.subscribeBestHead();
+
+    // Phase 3: Start the stall watchdog
+    this.startWatchdog();
 
     console.log(`[Pipeline:${this.chainId}] Pipeline is live.`);
   }
@@ -77,6 +90,10 @@ export class IngestionPipeline {
     this.running = false;
     if (this.finalizedUnsub) this.finalizedUnsub();
     if (this.bestUnsub) this.bestUnsub();
+    if (this.watchdogInterval) clearInterval(this.watchdogInterval);
+    this.finalizedUnsub = null;
+    this.bestUnsub = null;
+    this.watchdogInterval = null;
     console.log(`[Pipeline:${this.chainId}] Pipeline stopped.`);
   }
 
@@ -168,6 +185,43 @@ export class IngestionPipeline {
     }
   }
 
+  /**
+   * Stall watchdog — periodically checks if the PAPI subscription is still
+   * delivering finalized blocks. If not, it destroys the entire PAPI client
+   * (closing the WebSocket to release all leaked chainHead_follow subscriptions)
+   * and creates a fresh one.
+   *
+   * This handles the case where PAPI's internal follow-enhancer enters an
+   * infinite retry loop without ever surfacing an error to our Observable
+   * subscriber. The internal retries leak chainHead_follow subscriptions on
+   * the RPC node, saturating its limit and creating a death spiral.
+   *
+   * Recovery strategy: exit the process with code 1. Docker's
+   * `restart: unless-stopped` will restart the container with a completely
+   * clean state — no leaked follows, no hung WebSocket, no PAPI internal
+   * retry loops. Attempting to destroy/recreate the PAPI client from within
+   * the process is unreliable because PAPI's follow-enhancer holds opaque
+   * internal state that `client.destroy()` does not fully clean up.
+   */
+  private startWatchdog(): void {
+    this.watchdogInterval = setInterval(async () => {
+      if (!this.running) return;
+
+      const stalledMs = Date.now() - this.lastFinalizedAt;
+      if (stalledMs < IngestionPipeline.STALL_THRESHOLD_MS) return;
+
+      console.error(
+        `[Pipeline:${this.chainId}] WATCHDOG: no finalized block for ${Math.round(stalledMs / 1000)}s. ` +
+        `PAPI subscription is dead (chainHead_follow leak). Exiting process for Docker restart...`,
+      );
+      metrics.recordError();
+
+      // Give logs time to flush
+      await new Promise((r) => setTimeout(r, 500));
+      process.exit(1);
+    }, IngestionPipeline.WATCHDOG_INTERVAL_MS);
+  }
+
   /** Subscribe to the finalized block stream (with auto-reconnect) */
   private subscribeFinalized(retryCount = 0): void {
     // Unsubscribe any previous subscription to prevent chainHead_follow leak
@@ -180,13 +234,14 @@ export class IngestionPipeline {
       this.finalizedUnsub = null;
     }
 
-    const MAX_STREAM_RETRIES = 10;
+    const MAX_STREAM_RETRIES = 5;
     const { client } = this.papiClient;
 
     const sub = client.finalizedBlock$.subscribe({
       next: async (block) => {
         try {
           console.log(`[Pipeline:${this.chainId}] Finalized block #${block.number}`);
+          this.lastFinalizedAt = Date.now();
 
           await this.fetchAndProcessByHash(block.hash, block.number, "finalized");
           await finalizeBlock(block.number);
@@ -207,7 +262,7 @@ export class IngestionPipeline {
           // Ignore
         }
         if (this.running && retryCount < MAX_STREAM_RETRIES) {
-          const delay = Math.min(1000 * 2 ** retryCount, 60_000);
+          const delay = Math.min(1000 * 2 ** retryCount, 30_000);
           console.log(
             `[Pipeline:${this.chainId}] Reconnecting finalized stream in ${delay}ms (attempt ${retryCount + 1}/${MAX_STREAM_RETRIES})...`,
           );
@@ -217,9 +272,10 @@ export class IngestionPipeline {
         } else if (retryCount >= MAX_STREAM_RETRIES) {
           console.error(
             `[Pipeline:${this.chainId}] Finalized stream exhausted ${MAX_STREAM_RETRIES} retries. ` +
-            `Falling back to legacy RPC polling. Manual restart recommended.`,
+            `Exiting process for Docker restart...`,
           );
           metrics.recordError();
+          process.exit(1);
         }
       },
     });
@@ -239,7 +295,7 @@ export class IngestionPipeline {
       this.bestUnsub = null;
     }
 
-    const MAX_STREAM_RETRIES = 10;
+    const MAX_STREAM_RETRIES = 5;
     const { client } = this.papiClient;
 
     const sub = client.bestBlocks$.subscribe({
@@ -266,7 +322,7 @@ export class IngestionPipeline {
           // Ignore
         }
         if (this.running && retryCount < MAX_STREAM_RETRIES) {
-          const delay = Math.min(1000 * 2 ** retryCount, 60_000);
+          const delay = Math.min(1000 * 2 ** retryCount, 30_000);
           console.log(
             `[Pipeline:${this.chainId}] Reconnecting best stream in ${delay}ms (attempt ${retryCount + 1}/${MAX_STREAM_RETRIES})...`,
           );
@@ -276,9 +332,10 @@ export class IngestionPipeline {
         } else if (retryCount >= MAX_STREAM_RETRIES) {
           console.error(
             `[Pipeline:${this.chainId}] Best stream exhausted ${MAX_STREAM_RETRIES} retries. ` +
-            `Best-head tracking disabled. Manual restart recommended.`,
+            `Exiting process for Docker restart...`,
           );
           metrics.recordError();
+          process.exit(1);
         }
       },
     });
@@ -582,6 +639,19 @@ export class IngestionPipeline {
       const { client } = this.papiClient;
       const block = await client.getFinalizedBlock();
       return block.number;
+    } catch {
+      return 0;
+    }
+  }
+
+  /** Get the chain finalized height via legacy JSON-RPC (doesn't use chainHead_follow) */
+  private async getChainFinalizedHeightViaRpc(): Promise<number> {
+    try {
+      const hash = await this.rpcPool.call<string>("chain_getFinalizedHead", []);
+      if (!hash) return 0;
+      const header = await this.rpcPool.call<{ number: string }>("chain_getHeader", [hash]);
+      if (!header?.number) return 0;
+      return parseInt(header.number, 16);
     } catch {
       return 0;
     }
